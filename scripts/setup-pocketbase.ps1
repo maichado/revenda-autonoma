@@ -11,7 +11,7 @@ $RootDir = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'load-pb-secrets.ps1') -RootDir $RootDir
 
 Write-Host ''
-Write-Host '=== MG Revenda - Setup PocketBase ===' -ForegroundColor Cyan
+Write-Host '=== Revenda Autônoma - Setup PocketBase ===' -ForegroundColor Cyan
 Write-Host ''
 
 try {
@@ -58,7 +58,7 @@ Write-Host ''
 Write-Host 'Setup concluido!' -ForegroundColor Green
 Write-Host ''
 Write-Host 'Login no app:' -ForegroundColor White
-Write-Host '  maicon@gmrevenda.local / GmRevenda2024!' -ForegroundColor Gray
+Write-Host '  admin@revenda.local / RevendaAutonoma2024!' -ForegroundColor Gray
 Write-Host ''
 Write-Host 'Inicie o frontend: npm run dev' -ForegroundColor White
 Write-Host ''

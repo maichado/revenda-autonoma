@@ -222,7 +222,7 @@ export default function Configuracoes() {
       <ConfigSection
         icone={<Building2 size={20} />}
         titulo="Identidade"
-        descricao="Nome da revenda exibido no cabeçalho do sistema."
+        descricao="Nome da revenda exibido no cabeçalho, relatórios, PDFs e mensagens. Substitua pelo nome da sua loja."
       >
         <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
           <label className="block">
@@ -235,7 +235,7 @@ export default function Configuracoes() {
               onChange={(e) => setNomeRascunho(e.target.value)}
               maxLength={LIMITE_NOME_MAX + 10 /* sem barrar digitação além do limite */}
               className="input"
-              placeholder="Ex.: MG Revenda"
+              placeholder="Ex.: Revenda Autônoma"
               aria-invalid={!nomeValido}
             />
             <span

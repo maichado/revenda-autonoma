@@ -24,11 +24,11 @@ import {
 const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL
 const ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD
 
-const USUARIO_MAICON = {
-  email: 'maicon@gmrevenda.local',
-  password: 'GmRevenda2024!',
-  passwordConfirm: 'GmRevenda2024!',
-  name: 'Maicon Machado',
+const USUARIO_INICIAL = {
+  email: 'admin@revenda.local',
+  password: 'RevendaAutonoma2024!',
+  passwordConfirm: 'RevendaAutonoma2024!',
+  name: 'Administrador',
 }
 
 async function authAdmin() {
@@ -86,8 +86,8 @@ async function criarConfigPadrao(token) {
       body: JSON.stringify({
         id: 'config-default',
         slug: 'default',
-        nome_revenda: 'MG Revenda',
-        socios: ['Maicon Machado', 'Gustavo Feliciano'],
+        nome_revenda: 'Revenda Autônoma',
+        socios: ['Sócio principal', 'Sócio parceiro'],
         meta_lucro_mensal: 20000,
         capital_inicial_pessoal: 38000,
       }),
@@ -136,14 +136,14 @@ async function main() {
 
   console.log('Admin autenticado. Criando usuário do app...')
 
-  await criarUsuario(token, usersCollection.name, USUARIO_MAICON)
+  await criarUsuario(token, usersCollection.name, USUARIO_INICIAL)
 
   console.log('Criando configurações padrão (sem dados de negócio)...')
   await criarConfigPadrao(token)
 
   console.log('')
   console.log('Concluído! Login no app:')
-  console.log('  maicon@gmrevenda.local / GmRevenda2024!')
+  console.log('  admin@revenda.local / RevendaAutonoma2024!')
 }
 
 main().catch((err) => {

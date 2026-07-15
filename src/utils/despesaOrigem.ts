@@ -1,4 +1,5 @@
 import type { Despesa } from '@/types'
+import { NOME_REVENDA_PADRAO } from '@/constants/marca'
 import {
   normalizarNomeSocio,
   resolverNomeSocio,
@@ -24,7 +25,7 @@ export function valorPagoPorOrigem(
 }
 
 export function rotuloCaixaRevenda(nomeRevenda: string): string {
-  return `Caixa ${nomeRevenda.trim() || 'MG Revenda'}`
+  return `Caixa ${nomeRevenda.trim() || NOME_REVENDA_PADRAO}`
 }
 
 export function rotuloOrigemDespesa(

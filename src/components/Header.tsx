@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { ArrowDownRight, ArrowUpRight, TrendingUp } from 'lucide-react'
-import { LogoMgRevenda } from '@/components/LogoMgRevenda'
+import { LogoRevenda } from '@/components/LogoRevenda'
+import { abreviarNomeRevenda, NOME_REVENDA_PADRAO } from '@/constants/marca'
 import { useStore } from '@/store/useStore'
 import { lucroDoMesBreakdown } from '@/utils/calculos'
 import { formatarMoeda } from '@/utils/formatadores'
@@ -23,7 +24,7 @@ export function Header() {
   )
   const lucro = breakdown.total
   const positivo = lucro >= 0
-  const marcaCurta = (nome || 'MG Revenda').trim().split(/\s+/)[0] || 'MG'
+  const marcaCurta = abreviarNomeRevenda(nome)
   const nomeDono = socios[0]?.trim().split(/\s+/)[0] || 'Você'
 
   const dataLonga = format(hoje, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })
@@ -39,11 +40,16 @@ export function Header() {
     >
       {/* Identidade (em mobile mostra a logo; em desktop o sidebar já mostra) */}
       <div className="flex items-center justify-center md:hidden">
-        <LogoMgRevenda height={33} />
+        <LogoRevenda
+          height={33}
+          nomeRevenda={nome || NOME_REVENDA_PADRAO}
+        />
       </div>
 
       <div className="hidden md:block">
-        <p className="text-sm font-semibold tracking-tight">{nome}</p>
+        <p className="text-sm font-semibold tracking-tight">
+          {nome?.trim() || NOME_REVENDA_PADRAO}
+        </p>
         <p className="text-xs capitalize text-zinc-500 dark:text-zinc-400">
           {dataLonga}
         </p>

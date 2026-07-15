@@ -15,7 +15,8 @@ import {
   Tags,
   type LucideIcon,
 } from 'lucide-react'
-import { LogoMgRevenda } from '@/components/LogoMgRevenda'
+import { LogoRevenda } from '@/components/LogoRevenda'
+import { NOME_REVENDA_PADRAO } from '@/constants/marca'
 import { useAuth } from '@/contexts/AuthContext'
 import { useStore } from '@/store/useStore'
 
@@ -41,7 +42,9 @@ export const navItems: NavItem[] = [
 export function Sidebar() {
   const colapsada = useStore((s) => s.sidebarColapsada)
   const setColapsada = useStore((s) => s.setSidebarColapsada)
+  const nomeRevenda = useStore((s) => s.configuracoes.nome_revenda)
   const { logout, user } = useAuth()
+  const rotulo = nomeRevenda?.trim() || NOME_REVENDA_PADRAO
 
   return (
     <aside
@@ -55,8 +58,21 @@ export function Sidebar() {
       aria-label="Navegação principal"
     >
       {/* Logo / topo */}
-      <div className="flex w-full items-center justify-center border-b border-border-light px-3 py-4 dark:border-border-dark">
-        <LogoMgRevenda height={colapsada ? 29 : 38} />
+      <div
+        className={[
+          'flex w-full flex-col items-center justify-center gap-1 border-b border-border-light px-3 py-4 dark:border-border-dark',
+          colapsada ? '' : 'text-center',
+        ].join(' ')}
+      >
+        <LogoRevenda
+          height={colapsada ? 29 : 38}
+          nomeRevenda={rotulo}
+        />
+        {!colapsada && (
+          <p className="line-clamp-2 text-xs font-semibold leading-tight tracking-tight text-zinc-700 dark:text-zinc-200">
+            {rotulo}
+          </p>
+        )}
       </div>
 
       {/* Links */}

@@ -53,7 +53,7 @@ import {
 import { pb } from '@/lib/pocketbase'
 import { isPbSyncEnabled } from '@/store/pbSyncBridge'
 
-const APP_NAME = 'gm-revenda'
+const APP_NAME = 'revenda-autonoma'
 const APP_VERSION = '0.1.0'
 
 export interface ArquivoBackup {

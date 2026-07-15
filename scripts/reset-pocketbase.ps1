@@ -20,7 +20,7 @@ $PbDir = [System.IO.Path]::GetFullPath($PbDir)
 $PbData = Join-Path $PbDir 'pb_data'
 
 Write-Host ''
-Write-Host '=== MG Revenda - RESET PocketBase ===' -ForegroundColor Red
+Write-Host '=== Revenda Autônoma - RESET PocketBase ===' -ForegroundColor Red
 Write-Host ''
 Write-Host 'ATENCAO: esta operacao apaga TODOS os dados do PocketBase local:' -ForegroundColor Yellow
 Write-Host '  - veiculos, compras, vendas, despesas, configuracoes' -ForegroundColor Yellow
@@ -79,5 +79,5 @@ Write-Host 'Ou manualmente:' -ForegroundColor White
 Write-Host '  1. .\scripts\start-pocketbase.ps1' -ForegroundColor Gray
 Write-Host '  2. Crie o superuser admin em http://127.0.0.1:8090/_/ (se pb_data foi apagada)' -ForegroundColor Gray
 Write-Host '  3. .\scripts\setup-pocketbase.ps1' -ForegroundColor Gray
-Write-Host '  4. npm run dev  ->  login maicon@gmrevenda.local / GmRevenda2024!' -ForegroundColor Gray
+Write-Host '  4. npm run dev  ->  login admin@revenda.local / RevendaAutonoma2024!' -ForegroundColor Gray
 Write-Host ''

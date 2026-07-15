@@ -1,9 +1,10 @@
-import { LogoMgRevenda } from './LogoMgRevenda'
+import { LogoRevenda } from './LogoRevenda'
 
 interface Props {
   titulo: string
   periodoLabel?: string
   subtitulo?: string
+  nomeRevenda?: string
 }
 
 /** Cabeçalho padronizado dos relatórios — logo + título + período. */
@@ -11,6 +12,7 @@ export function RelatorioCabecalho({
   titulo,
   periodoLabel,
   subtitulo,
+  nomeRevenda,
 }: Props) {
   return (
     <header
@@ -18,8 +20,9 @@ export function RelatorioCabecalho({
       className="relatorio-cabecalho border-b border-[#C8A96E]/40 pb-5"
     >
       <div className="relatorio-cabecalho-inner flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <LogoMgRevenda
+        <LogoRevenda
           height={40}
+          nomeRevenda={nomeRevenda}
           className="relatorio-cabecalho-logo mx-0 max-w-[120px] shrink-0 self-start"
         />
         <div className="relatorio-cabecalho-texto min-w-0 flex-1 text-left sm:text-right">

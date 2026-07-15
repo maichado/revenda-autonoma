@@ -4,8 +4,8 @@
  */
 import { authSuperuser, PB_URL, authHeaders } from './lib/pb-admin.js'
 
-const EMAIL = process.env.PB_APP_EMAIL || 'maicon@gmrevenda.local'
-const PASSWORD = process.env.PB_APP_PASSWORD || 'GmRevenda2024!'
+const EMAIL = process.env.PB_APP_EMAIL || 'admin@revenda.local'
+const PASSWORD = process.env.PB_APP_PASSWORD || 'RevendaAutonoma2024!'
 
 // ~2.5MB base64 payload (excede maxSize 2000000 do campo fotos)
 const FOTO_GRANDE = 'data:image/jpeg;base64,' + 'A'.repeat(2_500_000)

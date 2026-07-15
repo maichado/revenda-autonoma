@@ -1,6 +1,8 @@
-# Revenda Autônoma (MG Revenda)
+# Revenda Autônoma
 
-Sistema completo de gestão para **revenda de veículos usados**: estoque, compras, vendas, despesas, banco pessoal dos sócios, relatórios (com exportação WhatsApp/PDF) e dashboard financeiro.
+Sistema completo e **configurável** de gestão para **revenda de veículos usados**: estoque, compras, vendas, despesas, banco pessoal dos sócios, relatórios (com exportação WhatsApp/PDF) e dashboard financeiro.
+
+O **nome da loja**, **sócios** e **meta de lucro** são definidos em **Configurações** — nada fica preso a uma marca fixa. O padrão de fábrica é **Revenda Autônoma**.
 
 Roda **no seu PC** com frontend React e backend **PocketBase** local (gratuito, open source). Os dados de negócio ficam no servidor PocketBase; o navegador guarda só preferências de interface e sessão de login.
 
@@ -31,7 +33,8 @@ Roda **no seu PC** com frontend React e backend **PocketBase** local (gratuito, 
 | **Veículos** | Estoque, fotos, status (em preparação, disponível, reservado, vendido), data do anúncio |
 | **Compras / Vendas** | Histórico financeiro por veículo |
 | **Despesas** | Por veículo ou gerais; origem caixa da revenda ou pessoal; quem pagou |
-| **Banco Pessoal** | Pool dos sócios, caixa MG Revenda, carros e lançamentos pessoais |
+| **Banco Pessoal** | Pool dos sócios, caixa da revenda, carros e lançamentos pessoais |
+| **Configurações** | Nome da revenda, sócios, meta, backup — personaliza toda a identidade |
 | **Relatórios** | Geral, por módulo ou por veículo; compartilhar via WhatsApp; PDF |
 | **Configurações** | Sócios, meta, backup/importação, nome da revenda |
 
@@ -166,8 +169,8 @@ Abra **http://localhost:5173**
 
 Após o `setup-pocketbase.ps1` (feito pelo script acima), use o usuário criado pelo seed:
 
-- **E-mail:** `maicon@gmrevenda.local`
-- **Senha inicial de dev:** `GmRevenda2024!` (altere em **Auth → Users** no admin)
+- **E-mail:** `admin@revenda.local`
+- **Senha inicial de dev:** `RevendaAutonoma2024!` (altere em **Collections → users** no admin)
 
 ---
 
@@ -356,8 +359,19 @@ src/
 
 ---
 
+## Personalização (Configurações)
+
+| Campo | Onde aparece |
+|-------|----------------|
+| **Nome da revenda** | Header, sidebar, login, relatórios, PDF, WhatsApp, título do navegador |
+| **Sócios** | Despesas, banco pessoal, divisão de lucro, relatórios |
+| **Meta de lucro** | Dashboard |
+| **Logo** | Substitua `public/logo-revenda.png` (opcional; fallback com iniciais) |
+
+Nomes legados (`MG Revenda`, `GM Revenda`) são convertidos automaticamente para **Revenda Autônoma** ao importar backup.
+
+---
+
 ## Licença e uso
 
-Projeto privado da revenda. Uso interno. Não commitar dados de clientes, placas reais ou credenciais de produção.
-
-**Desenvolvido para operação autônoma da revenda — MG Revenda.**
+Projeto para gestão autônoma de revenda de veículos. Uso interno. Não commitar dados de clientes, placas reais ou credenciais de produção.

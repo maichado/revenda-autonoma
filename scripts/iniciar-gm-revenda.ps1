@@ -110,7 +110,7 @@ npm run preview$openFlag
 }
 
 Write-Host ''
-Write-Host '=== MG Revenda — Iniciar tudo ===' -ForegroundColor Cyan
+Write-Host '=== Revenda Autônoma — Iniciar tudo ===' -ForegroundColor Cyan
 Write-Host ''
 
 if ($Reset) {
@@ -144,7 +144,7 @@ $precisaSeed = $false
 if ($Reset -or -not (Test-Path $PbData)) { $precisaSeed = $true }
 else {
     try {
-        $authBody = @{ identity = 'maicon@gmrevenda.local'; password = 'GmRevenda2024!' } | ConvertTo-Json
+        $authBody = @{ identity = 'admin@revenda.local'; password = 'RevendaAutonoma2024!' } | ConvertTo-Json
         $auth = Invoke-RestMethod -Method Post `
             -Uri 'http://127.0.0.1:8090/api/collections/users/auth-with-password' `
             -ContentType 'application/json' -Body $authBody -ErrorAction Stop
@@ -186,7 +186,7 @@ Write-Host ''
 Write-Host '=== Pronto ===' -ForegroundColor Green
 Write-Host '  App:        http://localhost:5173' -ForegroundColor White
 Write-Host '  PocketBase: http://127.0.0.1:8090' -ForegroundColor White
-Write-Host '  Login app:  maicon@gmrevenda.local / GmRevenda2024!' -ForegroundColor Gray
+Write-Host '  Login app:  admin@revenda.local / RevendaAutonoma2024!' -ForegroundColor Gray
 Write-Host ''
 Write-Host 'Dados em:' -ForegroundColor Gray
 Write-Host "  $PbData" -ForegroundColor Gray

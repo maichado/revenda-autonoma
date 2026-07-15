@@ -12,11 +12,12 @@
 
 import { AlertTriangle, MessageCircle } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { LogoMgRevenda } from './LogoMgRevenda'
+import { LogoRevenda } from './LogoRevenda'
 import { LIMITE_TEXTO_AVISO } from '@/utils/compartilhar'
 
 interface Props {
   texto: string
+  nomeRevenda?: string
 }
 
 // -----------------------------------------------------------------------------
@@ -70,7 +71,7 @@ function horaAgora(): string {
   return `${h}:${m}`
 }
 
-export function BolhaWhatsApp({ texto }: Props) {
+export function BolhaWhatsApp({ texto, nomeRevenda }: Props) {
   const totalChars = texto.length
   const proximoLimite = totalChars > LIMITE_TEXTO_AVISO
 
@@ -110,7 +111,7 @@ export function BolhaWhatsApp({ texto }: Props) {
               style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
             />
             <div className="mb-3 flex items-center border-b border-black/10 pb-2 dark:border-white/10">
-              <LogoMgRevenda height={32} />
+              <LogoRevenda height={32} nomeRevenda={nomeRevenda} />
             </div>
             <pre
               className="m-0 max-w-full whitespace-pre-wrap break-words text-[13.5px] leading-[1.6]"

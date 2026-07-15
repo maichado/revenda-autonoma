@@ -4,6 +4,7 @@ import { ToastProvider } from '@/components/ToastProvider'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { useTheme } from '@/hooks/useTheme'
+import { useTituloRevenda } from '@/hooks/useTituloRevenda'
 
 import Dashboard from '@/pages/Dashboard'
 import Veiculos from '@/pages/Veiculos'
@@ -19,6 +20,7 @@ import Login from '@/pages/Login'
 
 function AppRoutes() {
   useTheme()
+  useTituloRevenda()
 
   return (
     <Routes>

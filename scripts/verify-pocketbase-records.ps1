@@ -2,18 +2,18 @@
 #
 # Uso:
 #   .\scripts\verify-pocketbase-records.ps1
-#   .\scripts\verify-pocketbase-records.ps1 -Email "maicon@gmrevenda.local" -Password "GmRevenda2024!"
+#   .\scripts\verify-pocketbase-records.ps1 -Email "admin@revenda.local" -Password "RevendaAutonoma2024!"
 
 param(
   [string]$PbUrl = 'http://127.0.0.1:8090',
-  [string]$Email = 'maicon@gmrevenda.local',
-  [string]$Password = 'GmRevenda2024!'
+  [string]$Email = 'admin@revenda.local',
+  [string]$Password = 'RevendaAutonoma2024!'
 )
 
 $ErrorActionPreference = 'Stop'
 
 Write-Host ''
-Write-Host '=== MG Revenda - Verificar records PocketBase ===' -ForegroundColor Cyan
+Write-Host '=== Revenda Autônoma - Verificar records PocketBase ===' -ForegroundColor Cyan
 Write-Host "URL: $PbUrl" -ForegroundColor Gray
 Write-Host ''
 

@@ -22,7 +22,7 @@ interface Props {
   slug: string
   /** Exibe botão "Gerar PDF" e captura a área visual do relatório. */
   habilitarPdf?: boolean
-  /** Nome da revenda no rodapé do PDF (padrão: MG Revenda). */
+  /** Nome da revenda no rodapé do PDF (vem de Configurações). */
   nomeRevenda?: string
 }
 
@@ -150,6 +150,7 @@ export function RelatorioLayout({
               titulo={titulo}
               periodoLabel={periodoLabel}
               subtitulo={descricao}
+              nomeRevenda={nomeRevenda}
             />
             <div className="space-y-6">{visual}</div>
             <footer
@@ -167,7 +168,7 @@ export function RelatorioLayout({
             visao !== 'whatsapp' ? 'hidden lg:block' : '',
           ].join(' ')}
         >
-          <BolhaWhatsApp texto={texto} />
+          <BolhaWhatsApp texto={texto} nomeRevenda={nomeRevenda} />
         </div>
       </div>
     </section>

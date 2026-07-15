@@ -1,4 +1,4 @@
-# Inicia PocketBase para o MG Revenda (Windows PowerShell)
+# Inicia PocketBase para Revenda Autônoma (Windows PowerShell)
 # Uso: .\scripts\start-pocketbase.ps1
 
 $ErrorActionPreference = "Stop"

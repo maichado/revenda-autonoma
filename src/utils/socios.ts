@@ -1,5 +1,5 @@
-/** Sócios padrão da MG Revenda — índice 0 = principal (Banco Pessoal). */
-export const SOCIOS_PADRAO = ['Maicon Machado', 'Gustavo Feliciano'] as const
+/** Sócios padrão — índice 0 = principal (Banco Pessoal). Personalize em Configurações. */
+export const SOCIOS_PADRAO = ['Sócio principal', 'Sócio parceiro'] as const
 
 export function normalizarNomeSocio(n: string): string {
   return n

@@ -1,4 +1,4 @@
-// Tipos centrais do sistema MG Revenda.
+// Tipos centrais do sistema Revenda Autônoma.
 // Todos os módulos consomem estes contratos — mesmo os que serão
 // implementados em fases futuras (Veículos, Compras, Vendas, etc.).
 
@@ -103,7 +103,7 @@ export interface Veiculo {
    * Banco Pessoal ou ao registrar a venda.
    */
   investimento_pessoal_devolvido?: boolean
-  /** Caixa MG Revenda usado na compra (100% do valor do carro). */
+  /** Caixa da revenda usado na compra (100% do valor do carro). */
   compra_funding_revenda?: number
   /** Pool pessoal (capital + reinvestimento) usado na compra. */
   compra_funding_investimento?: number
@@ -258,7 +258,7 @@ export interface CarroBancoPessoal {
   minha_parte: number
   /** Valor pessoal na compra acima do pool (capital + reinvestimento). */
   extrapessoal_compra: number
-  /** Sua parte na compra paga com caixa MG Revenda. */
+  /** Sua parte na compra paga com caixa da revenda. */
   do_revenda: number
   /** Sua parte na compra paga com pool (capital + reinvestimento). */
   do_investimento: number

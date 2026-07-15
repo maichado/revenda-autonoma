@@ -5,8 +5,8 @@
 import PocketBase from 'pocketbase'
 
 const PB_URL = process.env.PB_URL || 'http://127.0.0.1:8090'
-const EMAIL = process.env.PB_APP_EMAIL || 'maicon@gmrevenda.local'
-const PASSWORD = process.env.PB_APP_PASSWORD || 'GmRevenda2024!'
+const EMAIL = process.env.PB_APP_EMAIL || 'admin@revenda.local'
+const PASSWORD = process.env.PB_APP_PASSWORD || 'RevendaAutonoma2024!'
 
 const FOTO_GRANDE = 'data:image/jpeg;base64,' + 'A'.repeat(2_500_000)
 
@@ -106,7 +106,7 @@ const estado = {
     },
   ],
   configuracoes: {
-    nome_revenda: 'MG Revenda',
+    nome_revenda: 'Revenda Autônoma',
     socios: ['Maicon Machado'],
     meta_lucro_mensal: 5000,
   },

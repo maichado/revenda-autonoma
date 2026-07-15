@@ -7,7 +7,7 @@
 //    white-space: pre-wrap). O wa.me cuida do encoding via encodeURIComponent.
 //  • Moeda sempre R$ X.XXX,XX (pt-BR), datas dd/mm/yyyy.
 //  • Limite de 20 itens nas listagens — quando exceder, mostra "+N itens".
-//  • Cada texto termina com a assinatura "— MG Revenda · enviado em ...".
+//  • Cada texto termina com a assinatura "— {nome da revenda} · enviado em ...".
 
 import { format } from 'date-fns'
 import { NOME_REVENDA_PADRAO } from '@/constants/marca'
