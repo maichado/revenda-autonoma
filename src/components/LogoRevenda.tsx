@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { Car } from 'lucide-react'
 import { NOME_REVENDA_PADRAO } from '@/constants/marca'
 
-const LOGO_CUSTOM = '/logo-revenda.png'
-const LOGO_LEGADO = '/logo-mg-revenda.png'
+const LOGO_SRC = '/logo-revenda.png?v=rvd-autonoma'
 
 interface Props {
   /** Altura em px — padrão 40 (header/sidebar expandida). */
@@ -26,16 +25,7 @@ export function LogoRevenda({
   nomeRevenda,
 }: Props) {
   const rotulo = (nomeRevenda?.trim() || NOME_REVENDA_PADRAO).trim()
-  const [srcAtual, setSrcAtual] = useState(LOGO_CUSTOM)
   const [erro, setErro] = useState(false)
-
-  function onErroImagem() {
-    if (srcAtual === LOGO_CUSTOM) {
-      setSrcAtual(LOGO_LEGADO)
-      return
-    }
-    setErro(true)
-  }
 
   if (erro) {
     return (
@@ -61,13 +51,15 @@ export function LogoRevenda({
 
   return (
     <img
-      src={srcAtual}
+      src={LOGO_SRC}
       alt={rotulo}
-      className={['mx-auto block w-auto shrink-0 object-contain', className].join(
-        ' ',
-      )}
-      style={{ height }}
-      onError={onErroImagem}
+      className={[
+        'mx-auto block w-auto shrink-0 object-contain',
+        'rounded-md',
+        className,
+      ].join(' ')}
+      style={{ height, maxWidth: height * 2.2 }}
+      onError={() => setErro(true)}
     />
   )
 }
