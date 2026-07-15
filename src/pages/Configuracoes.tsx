@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { CONFIGURACOES_PADRAO } from '@/constants/configuracoesPadrao'
+import { rotuloCaixaRevenda } from '@/utils/despesaOrigem'
 import { normalizarListaSocios, sociosFromFormulario } from '@/utils/socios'
 import {
   Building2,
@@ -141,7 +142,7 @@ export default function Configuracoes() {
     await salvarServidor(
       () => updateConfiguracoes({ nome_revenda: nomeNormalizado }),
       'Nome atualizado',
-      `Revenda agora se chama "${nomeNormalizado}".`,
+      `Revenda: "${nomeNormalizado}". Em Despesas o caixa passa a ser ${rotuloCaixaRevenda(nomeNormalizado)}.`,
     )
   }
 
@@ -222,7 +223,7 @@ export default function Configuracoes() {
       <ConfigSection
         icone={<Building2 size={20} />}
         titulo="Identidade"
-        descricao="Nome da revenda exibido no cabeçalho, relatórios, PDFs e mensagens. Substitua pelo nome da sua loja."
+        descricao="Nome da loja no sistema. Em Despesas, o caixa da empresa aparece como “Caixa {seu nome}” em Quem pagou."
       >
         <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
           <label className="block">
@@ -235,7 +236,7 @@ export default function Configuracoes() {
               onChange={(e) => setNomeRascunho(e.target.value)}
               maxLength={LIMITE_NOME_MAX + 10 /* sem barrar digitação além do limite */}
               className="input"
-              placeholder="Ex.: Revenda Autônoma"
+              placeholder="Ex.: RVD Autônoma"
               aria-invalid={!nomeValido}
             />
             <span
@@ -247,7 +248,7 @@ export default function Configuracoes() {
               ].join(' ')}
             >
               {nomeValido
-                ? `${nomeNormalizado.length}/${LIMITE_NOME_MAX} caracteres.`
+                ? `${nomeNormalizado.length}/${LIMITE_NOME_MAX} caracteres · Despesas: ${rotuloCaixaRevenda(nomeNormalizado)}`
                 : `Use entre ${LIMITE_NOME_MIN} e ${LIMITE_NOME_MAX} caracteres.`}
             </span>
           </label>

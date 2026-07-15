@@ -1,6 +1,6 @@
 {
-  "name": "revenda-autonoma",
-  "description": "Gestão autônoma de revenda de veículos — React + PocketBase",
+  "name": "rvd-autonoma",
+  "description": "RVD Autônoma — gestão de revenda de veículos (React + PocketBase)",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,8 +8,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/iniciar-gm-revenda.ps1",
-    "start:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/iniciar-gm-revenda.ps1 -Dev",
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/iniciar-rvd-autonoma.ps1",
+    "start:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/iniciar-rvd-autonoma.ps1 -Dev",
     "lint": "tsc -b --noEmit"
   },
   "dependencies": {

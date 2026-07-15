@@ -106,7 +106,7 @@ const estado = {
     },
   ],
   configuracoes: {
-    nome_revenda: 'Revenda Autônoma',
+    nome_revenda: 'RVD Autônoma',
     socios: ['Maicon Machado'],
     meta_lucro_mensal: 5000,
   },

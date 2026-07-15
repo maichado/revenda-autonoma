@@ -1,4 +1,4 @@
-// Tipos centrais do sistema Revenda Autônoma.
+// Tipos centrais do sistema RVD Autônoma.
 // Todos os módulos consomem estes contratos — mesmo os que serão
 // implementados em fases futuras (Veículos, Compras, Vendas, etc.).
 

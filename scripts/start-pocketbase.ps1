@@ -1,10 +1,11 @@
-# Inicia PocketBase para Revenda Autônoma (Windows PowerShell)
+# Inicia PocketBase para RVD Autônoma (Windows PowerShell)
 # Uso: .\scripts\start-pocketbase.ps1
 
 $ErrorActionPreference = "Stop"
 
-$PbDir = Join-Path (Split-Path $PSScriptRoot -Parent) "..\gm-revenda-pb"
-$PbDir = [System.IO.Path]::GetFullPath($PbDir)
+. (Join-Path $PSScriptRoot 'lib\pb-paths.ps1')
+$RootDir = Split-Path $PSScriptRoot -Parent
+$PbDir = Get-PbDirectory -ProjectRoot $RootDir
 $PbExe = Join-Path $PbDir "pocketbase.exe"
 $PbVersion = "0.25.8"
 $DownloadUrl = "https://github.com/pocketbase/pocketbase/releases/download/v$PbVersion/pocketbase_${PbVersion}_windows_amd64.zip"

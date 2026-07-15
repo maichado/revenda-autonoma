@@ -6,7 +6,7 @@
 #   .\scripts\reset-pocketbase.ps1 -Force   # sem confirmacao (scripts automatizados)
 #
 # Depois:
-#   .\scripts\iniciar-gm-revenda.ps1
+#   .\scripts\iniciar-rvd-autonoma.ps1
 #   ou manualmente: start-pocketbase.ps1 + setup-pocketbase.ps1
 
 param(
@@ -15,12 +15,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$PbDir = Join-Path (Split-Path $PSScriptRoot -Parent) '..\gm-revenda-pb'
-$PbDir = [System.IO.Path]::GetFullPath($PbDir)
+. (Join-Path $PSScriptRoot 'lib\pb-paths.ps1')
+$RootDir = Split-Path $PSScriptRoot -Parent
+$PbDir = Get-PbDirectory -ProjectRoot $RootDir
 $PbData = Join-Path $PbDir 'pb_data'
 
 Write-Host ''
-Write-Host '=== Revenda Autônoma - RESET PocketBase ===' -ForegroundColor Red
+Write-Host '=== RVD Autônoma - RESET PocketBase ===' -ForegroundColor Red
 Write-Host ''
 Write-Host 'ATENCAO: esta operacao apaga TODOS os dados do PocketBase local:' -ForegroundColor Yellow
 Write-Host '  - veiculos, compras, vendas, despesas, configuracoes' -ForegroundColor Yellow
@@ -73,7 +74,7 @@ Write-Host ''
 Write-Host '=== Proximos passos ===' -ForegroundColor Cyan
 Write-Host ''
 Write-Host 'Opcao rapida (recomendado):' -ForegroundColor White
-Write-Host '  .\scripts\iniciar-gm-revenda.ps1' -ForegroundColor Gray
+Write-Host '  .\scripts\iniciar-rvd-autonoma.ps1' -ForegroundColor Gray
 Write-Host ''
 Write-Host 'Ou manualmente:' -ForegroundColor White
 Write-Host '  1. .\scripts\start-pocketbase.ps1' -ForegroundColor Gray

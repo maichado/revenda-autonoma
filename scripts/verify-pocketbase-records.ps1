@@ -13,7 +13,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 Write-Host ''
-Write-Host '=== Revenda Autônoma - Verificar records PocketBase ===' -ForegroundColor Cyan
+Write-Host '=== RVD Autônoma - Verificar records PocketBase ===' -ForegroundColor Cyan
 Write-Host "URL: $PbUrl" -ForegroundColor Gray
 Write-Host ''
 

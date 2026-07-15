@@ -18,7 +18,10 @@ tsconfig.node.tsbuildinfo
 scripts/secrets.ps1
 
 # PocketBase em runtime (binário + banco SQLite)
-# A pasta irmã gm-revenda-pb é criada pelos scripts fora deste repo
+# Pasta de dados PocketBase (irmã do repositório — fora do Git)
+../rvd-autonoma-pb/
+rvd-autonoma-pb/
+# Legado (antes da renomeação)
 ../gm-revenda-pb/
 gm-revenda-pb/
 pocketbase/pb_data/

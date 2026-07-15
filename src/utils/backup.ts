@@ -3,7 +3,7 @@
 // Formato do arquivo gerado/aceito:
 //
 //   {
-//     "appName": "gm-revenda",
+//     "appName": "rvd-autonoma",
 //     "appVersion": "0.1.0",          // versão do package.json
 //     "schemaVersion": 6,             // versão do schema (igual à STORE_VERSION)
 //     "exportadoEm": "ISO date-time",
@@ -25,11 +25,8 @@
 //   • Quando a versão é igual à atual, aplicamos sem reload (UX melhor).
 
 import { format } from 'date-fns'
-import {
-  NOME_REVENDA_PADRAO,
-  SLUG_ARQUIVO_REVENDA,
-  normalizarNomeRevenda,
-} from '@/constants/marca'
+import { APP_SLUG, NOME_REVENDA_PADRAO, SLUG_ARQUIVO_REVENDA, normalizarNomeRevenda } from '@/constants/marca'
+import { consumirFlagBackupLegada } from '@/constants/storage'
 import { normalizarListaSocios } from '@/utils/socios'
 import type {
   Compra,
@@ -53,7 +50,7 @@ import {
 import { pb } from '@/lib/pocketbase'
 import { isPbSyncEnabled } from '@/store/pbSyncBridge'
 
-const APP_NAME = 'revenda-autonoma'
+const APP_NAME = APP_SLUG
 const APP_VERSION = '0.1.0'
 
 export interface ArquivoBackup {
@@ -399,14 +396,5 @@ export function calcularTamanhoEstado(): number {
  * mesmo após o refresh.
  */
 export function consumirFlagBackupAplicado(): boolean {
-  try {
-    const v = sessionStorage.getItem('gm-revenda-backup-aplicado')
-    if (v) {
-      sessionStorage.removeItem('gm-revenda-backup-aplicado')
-      return true
-    }
-  } catch {
-    // ignora
-  }
-  return false
+  return consumirFlagBackupLegada()
 }

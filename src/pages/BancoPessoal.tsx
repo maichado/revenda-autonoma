@@ -20,6 +20,7 @@ import {
   primeiroNomeDono,
   resumoBancoPessoal,
 } from '@/utils/bancoPessoal'
+import { rotuloCaixaRevenda } from '@/utils/despesaOrigem'
 import type { LancamentoBancoPessoal } from '@/types'
 
 import { Button } from '@/components/Button'
@@ -157,7 +158,7 @@ export default function BancoPessoal() {
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Numero
-          rotulo={`Caixa ${nomeRevenda}`}
+          rotulo={rotuloCaixaRevenda(nomeRevenda)}
           valor={resumo.caixaRevenda}
           icone={<Wallet size={18} />}
           destaque="primary"

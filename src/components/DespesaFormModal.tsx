@@ -388,8 +388,8 @@ export function DespesaFormModal({
               <OrigemOpcao
                 selecionado={form.origem === 'revenda'}
                 icone={<Building2 size={18} />}
-                titulo="Caixa da revenda"
-                descricao={caixaLabel}
+                titulo={caixaLabel}
+                descricao="Pagamento com o caixa da loja"
                 onClick={() => selecionarOrigem('revenda')}
               />
               <OrigemOpcao

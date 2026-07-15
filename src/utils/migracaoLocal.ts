@@ -1,13 +1,16 @@
 import { CONFIGURACOES_PADRAO } from '@/constants/configuracoesPadrao'
-import { STORAGE_KEY } from '@/store/useStore'
+import {
+  MIGRACAO_KEY,
+  lerEstadoLocalLegado,
+} from '@/constants/storage'
 import type { EstadoImportavel } from '@/store/useStore'
 import type { Despesa, Veiculo } from '@/types'
 
-export const MIGRACAO_KEY = 'gm-revenda-migrado-pb'
+export { MIGRACAO_KEY } from '@/constants/storage'
 
 export function lerLocalStorageAntigo(): EstadoImportavel | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = lerEstadoLocalLegado()
     if (!raw) return null
     const parsed = JSON.parse(raw) as {
       state?: Partial<EstadoImportavel>

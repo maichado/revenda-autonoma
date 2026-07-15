@@ -86,7 +86,7 @@ async function criarConfigPadrao(token) {
       body: JSON.stringify({
         id: 'config-default',
         slug: 'default',
-        nome_revenda: 'Revenda Autônoma',
+        nome_revenda: 'RVD Autônoma',
         socios: ['Sócio principal', 'Sócio parceiro'],
         meta_lucro_mensal: 20000,
         capital_inicial_pessoal: 38000,

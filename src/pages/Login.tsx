@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { LogIn, Mail, Lock, WifiOff } from 'lucide-react'
 import { LogoRevenda } from '@/components/LogoRevenda'
-import { NOME_REVENDA_PADRAO } from '@/constants/marca'
 import { Button } from '@/components/Button'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuth } from '@/contexts/AuthContext'
@@ -83,16 +82,8 @@ export default function Login() {
       </div>
 
       <div className="card w-full max-w-md p-8 shadow-lg">
-        <div className="mb-8 flex flex-col items-center gap-4 text-center">
-          <LogoRevenda height={52} nomeRevenda={NOME_REVENDA_PADRAO} />
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">
-              {NOME_REVENDA_PADRAO}
-            </h1>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Gestão de compra e venda de veículos
-            </p>
-          </div>
+        <div className="mb-8 flex justify-center">
+          <LogoRevenda height={64} />
         </div>
 
         {pbOnline === false && (

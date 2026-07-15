@@ -238,7 +238,7 @@ export interface FundingCompra {
 
   veiculo_id: string
 
-  /** Sua parte paga com caixa MG Revenda (100% da loja × sua fração). */
+  /** Sua parte paga com caixa da revenda (100% da loja × sua fração). */
   do_revenda: number
 
   do_capital_inicial: number
@@ -373,7 +373,7 @@ export interface SimulacaoPoolPessoal {
 
   totalReinvestido: number
 
-  /** Caixa livre MG Revenda após simulação. */
+  /** Caixa livre da revenda após simulação. */
   saldoRevendaFinal: number
 
 }

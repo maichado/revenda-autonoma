@@ -1,8 +1,8 @@
-# Revenda Autônoma
+# RVD Autônoma
 
 Sistema completo e **configurável** de gestão para **revenda de veículos usados**: estoque, compras, vendas, despesas, banco pessoal dos sócios, relatórios (com exportação WhatsApp/PDF) e dashboard financeiro.
 
-O **nome da loja**, **sócios** e **meta de lucro** são definidos em **Configurações** — nada fica preso a uma marca fixa. O padrão de fábrica é **Revenda Autônoma**.
+O **nome da loja**, **sócios** e **meta de lucro** são definidos em **Configurações** — nada fica preso a uma marca fixa. O padrão de fábrica é **RVD Autônoma**.
 
 Roda **no seu PC** com frontend React e backend **PocketBase** local (gratuito, open source). Os dados de negócio ficam no servidor PocketBase; o navegador guarda só preferências de interface e sessão de login.
 
@@ -60,13 +60,13 @@ Roda **no seu PC** com frontend React e backend **PocketBase** local (gratuito, 
 
 ```
 Seu computador
-├── revenda-autonoma/        ← este repositório (frontend + scripts + schema)
+├── rvd-autonoma/            ← pasta local do projeto (clone: revenda-autonoma)
 │   ├── src/                 ← código React
 │   ├── pocketbase/
 │   │   └── pb_schema.json   ← estrutura das collections (versionada)
 │   └── scripts/             ← iniciar PB, importar schema, seed
 │
-└── gm-revenda-pb/           ← criada automaticamente (NÃO vai pro Git)
+└── rvd-autonoma-pb/         ← criada automaticamente (NÃO vai pro Git)
     ├── pocketbase.exe
     └── pb_data/             ← banco SQLite com seus dados reais
 ```
@@ -83,7 +83,7 @@ Estes arquivos/pastas estão no `.gitignore` e **nunca devem ser commitados**:
 |------|--------|
 | `.env` | URL customizada do servidor |
 | `.env.pb.local` | **E-mail e senha do admin PocketBase** |
-| `gm-revenda-pb/` | Banco com veículos, valores, clientes |
+| `rvd-autonoma-pb/` | Banco com veículos, valores, clientes |
 | `node_modules/`, `dist/` | Gerados localmente |
 | `scripts/secrets.ps1` | Segredos locais opcionais |
 
@@ -126,7 +126,7 @@ git clone https://github.com/maichado/revenda-autonoma.git
 cd revenda-autonoma
 ```
 
-> Se o repositório ainda tiver outro nome na pasta (`gm-revenda`), entre na pasta que contém `package.json`.
+> A pasta do clone no GitHub pode se chamar `revenda-autonoma`; o nome do produto e dos scripts é **RVD Autônoma** (`rvd-autonoma`).
 
 ### 2. Instalar dependências
 
@@ -146,12 +146,12 @@ Edite `.env.pb.local` com o e-mail e senha que **você** vai usar como **superus
 ### 4. Primeira execução completa
 
 ```powershell
-.\scripts\iniciar-gm-revenda.ps1
+.\scripts\iniciar-rvd-autonoma.ps1
 ```
 
 O script:
 
-1. Baixa o `pocketbase.exe` (se necessário) na pasta irmã `gm-revenda-pb`
+1. Baixa o `pocketbase.exe` (se necessário) na pasta irmã `rvd-autonoma-pb`
 2. Inicia o servidor na porta **8090**
 3. Na **primeira vez**, abre o painel admin — **crie o superuser** (mesmo e-mail/senha do `.env.pb.local`)
 4. Importa o schema (`pb_schema.json`)
@@ -188,7 +188,7 @@ Após o `setup-pocketbase.ps1` (feito pelo script acima), use o usuário criado 
 npm run dev
 ```
 
-**Atalho:** duplo clique em `Iniciar-GM-Revenda.bat` ou:
+**Atalho:** duplo clique em `Iniciar-RVD-Autonoma.bat` ou:
 
 ```powershell
 npm run start:dev
@@ -215,7 +215,7 @@ Abre em http://localhost:4173 (PocketBase continua obrigatório).
 
 ### O que é
 
-Banco + API + autenticação em um único executável. Os dados ficam em `../gm-revenda-pb/pb_data/` (SQLite).
+Banco + API + autenticação em um único executável. Os dados ficam em `../rvd-autonoma-pb/pb_data/` (SQLite).
 
 ### Collections principais
 
@@ -242,7 +242,7 @@ Requer `.env.pb.local` configurado.
 ### Reset total (apaga todos os dados)
 
 ```powershell
-.\scripts\iniciar-gm-revenda.ps1 -Reset
+.\scripts\iniciar-rvd-autonoma.ps1 -Reset
 ```
 
 Faz backup de `pb_data` com timestamp antes de apagar.
@@ -271,7 +271,7 @@ O novo usuário já pode entrar em http://localhost:5173 com esse e-mail e senha
 
 | Script | Função |
 |--------|--------|
-| `iniciar-gm-revenda.ps1` | Setup completo + inicia PB (+ `-Dev`, `-Reset`) |
+| `iniciar-rvd-autonoma.ps1` | Setup completo + inicia PB (+ `-Dev`, `-Reset`) |
 | `start-pocketbase.ps1` | Só o servidor |
 | `setup-pocketbase.ps1` | Schema + usuário seed |
 | `atualizar-schema.ps1` | Reimporta `pb_schema.json` |
@@ -295,7 +295,7 @@ git add .
 git status
 # Confirme que .env e .env.pb.local NÃO aparecem
 
-git commit -m "Initial commit: Revenda Autônoma - gestão de veículos com PocketBase"
+git commit -m "Initial commit: RVD Autônoma - gestão de veículos com PocketBase"
 
 git branch -M main
 git remote add origin https://github.com/maichado/revenda-autonoma.git
@@ -364,11 +364,12 @@ src/
 | Campo | Onde aparece |
 |-------|----------------|
 | **Nome da revenda** | Header, sidebar, login, relatórios, PDF, WhatsApp, título do navegador |
+| **Caixa da loja (Despesas)** | Mesmo nome — aparece como **Caixa {nome}** em “Quem pagou” |
 | **Sócios** | Despesas, banco pessoal, divisão de lucro, relatórios |
 | **Meta de lucro** | Dashboard |
-| **Logo** | Substitua `public/logo-revenda.png` (opcional; fallback com iniciais) |
+| **Logo** | Coloque `public/logo-revenda.svg` (vetor, sem fundo). Se não houver SVG, usa `logo-revenda.png` |
 
-Nomes legados (`MG Revenda`, `GM Revenda`) são convertidos automaticamente para **Revenda Autônoma** ao importar backup.
+Nomes legados (`MG Revenda`, `GM Revenda`, `Revenda Autônoma`) são convertidos automaticamente para **RVD Autônoma** ao importar backup.
 
 ---
 

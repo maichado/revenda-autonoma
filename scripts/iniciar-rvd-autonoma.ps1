@@ -1,10 +1,10 @@
 # Inicia tudo: PocketBase + schema + frontend (build de producao).
 #
 # Uso (duplo clique ou terminal):
-#   .\Iniciar-GM-Revenda.bat
-#   .\scripts\iniciar-gm-revenda.ps1
-#   .\scripts\iniciar-gm-revenda.ps1 -Dev          # modo desenvolvimento (hot reload)
-#   .\scripts\iniciar-gm-revenda.ps1 -Reset        # zera banco e recomeca
+#   .\Iniciar-RVD-Autonoma.bat
+#   .\scripts\iniciar-rvd-autonoma.ps1
+#   .\scripts\iniciar-rvd-autonoma.ps1 -Dev          # modo desenvolvimento (hot reload)
+#   .\scripts\iniciar-rvd-autonoma.ps1 -Reset        # zera banco e recomeca
 #
 # Credenciais admin PB: arquivo .env.pb.local (nao vai pro git)
 
@@ -16,7 +16,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $RootDir = Split-Path $PSScriptRoot -Parent
-$PbDir = [System.IO.Path]::GetFullPath((Join-Path $RootDir '..\gm-revenda-pb'))
+. (Join-Path $PSScriptRoot 'lib\pb-paths.ps1')
+$PbDir = Get-PbDirectory -ProjectRoot $RootDir
 $PbExe = Join-Path $PbDir 'pocketbase.exe'
 $PbData = Join-Path $PbDir 'pb_data'
 
@@ -110,7 +111,7 @@ npm run preview$openFlag
 }
 
 Write-Host ''
-Write-Host '=== Revenda Autônoma — Iniciar tudo ===' -ForegroundColor Cyan
+Write-Host '=== RVD Autônoma — Iniciar tudo ===' -ForegroundColor Cyan
 Write-Host ''
 
 if ($Reset) {
@@ -166,7 +167,7 @@ if ($precisaSeed) {
         & (Join-Path $PSScriptRoot 'setup-pocketbase.ps1')
     }
 } else {
-    Write-Host '  Schema e login Maicon OK.' -ForegroundColor Green
+    Write-Host '  Schema e login do app OK.' -ForegroundColor Green
 }
 
 Write-Host '[4/5] Build do frontend...' -ForegroundColor Cyan

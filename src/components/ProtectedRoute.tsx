@@ -49,7 +49,7 @@ export function ProtectedRoute() {
                   : 'O PocketBase não está respondendo em http://127.0.0.1:8090'}
               </p>
               <ul className="list-inside list-disc text-xs text-zinc-500">
-                <li>Rode <code className="rounded bg-zinc-100 px-1 dark:bg-white/10">Iniciar-GM-Revenda.bat</code></li>
+                <li>Rode <code className="rounded bg-zinc-100 px-1 dark:bg-white/10">Iniciar-RVD-Autonoma.bat</code></li>
                 <li>Ou: <code className="rounded bg-zinc-100 px-1 dark:bg-white/10">.\scripts\start-pocketbase.ps1</code></li>
               </ul>
               <Button variant="primary" size="sm" onClick={() => window.location.reload()}>

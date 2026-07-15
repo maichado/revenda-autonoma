@@ -16,7 +16,7 @@ import { FotoUploader } from './FotoUploader'
 import { formatarMoeda } from '@/utils/formatadores'
 import { sugerirFundingCompraFormulario } from '@/utils/bancoPessoal'
 import { socioParceiro, sociosAtivos } from '@/utils/socios'
-import { NOME_REVENDA_PADRAO } from '@/constants/marca'
+import { rotuloCaixaRevenda } from '@/utils/despesaOrigem'
 import { novoIdPb } from '@/lib/pbIds'
 import { useStore } from '@/store/useStore'
 import { buscarFipeAuto } from '@/lib/fipe'
@@ -855,11 +855,11 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
 
               <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <FundingOrigemColuna
-                  label={`Revenda (${NOME_REVENDA_PADRAO})`}
+                  label={rotuloCaixaRevenda(nomeRevenda)}
                   hint={
                     fundingResumo.revenda > 0 && form.funding_revenda_meia_socio
                       ? `Total na compra — sua parte: ${formatarMoeda(fundingResumo.revendaMeu)}`
-                      : 'Caixa da loja — valor total usado'
+                      : 'Valor total usado do caixa da loja'
                   }
                   error={errors.funding_revenda}
                   valor={form.funding_revenda}

@@ -14,6 +14,7 @@
 // Assim, qualquer ação em Veículos reflete imediatamente no Dashboard.
 // Cada mutação sincroniza com PocketBase quando o usuário está autenticado.
 
+import { PREFS_STORAGE_KEY } from '@/constants/storage'
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type {
@@ -39,6 +40,7 @@ import {
   vendasSeed,
 } from '@/utils/seed'
 import { comPersistencia } from '@/store/pbSyncBridge'
+import { remapPagoPorCaixaRevenda } from '@/utils/despesaOrigem'
 import { novoIdPb } from '@/lib/pbIds'
 import {
   importarParaPb,
@@ -163,10 +165,7 @@ interface EstadoApp {
 }
 
 // Chave legada (dados completos) — usada só para migração ao PocketBase.
-export const STORAGE_KEY = 'gm-revenda-state'
-
-// Preferências de UI (tema, sidebar) — persistidas localmente.
-export const PREFS_STORAGE_KEY = 'gm-revenda-prefs'
+export { STORAGE_KEY, PREFS_STORAGE_KEY } from '@/constants/storage'
 
 // Versão atual do schema persistido. Bate com `version` em `persist()` abaixo
 // e é gravada em todo arquivo de backup; a importação valida que o arquivo
@@ -325,7 +324,41 @@ export const useStore = create<EstadoApp>()(
 
       // ------- Configurações -------
       updateConfiguracoes: async (parcial) => {
-        const next = { ...get().configuracoes, ...parcial }
+        const prev = get().configuracoes
+        const next = { ...prev, ...parcial }
+        const nomeNovo = parcial.nome_revenda?.trim()
+        const nomeAntigo = prev.nome_revenda.trim()
+        const renomeouCaixa =
+          !!nomeNovo && nomeNovo !== nomeAntigo
+
+        if (renomeouCaixa) {
+          const despesasAtuais = get().despesas
+          const despesasAtualizadas = remapPagoPorCaixaRevenda(
+            despesasAtuais,
+            nomeNovo,
+            next.socios,
+            nomeAntigo,
+          )
+          const alteradas = despesasAtualizadas.filter(
+            (d, i) => d.pago_por !== despesasAtuais[i]?.pago_por,
+          )
+
+          await comPersistencia(
+            async () => {
+              await syncConfiguracoes(next)
+              for (const d of alteradas) {
+                await syncDespesaUpdate(d.id, { pago_por: d.pago_por })
+              }
+            },
+            () =>
+              set({
+                configuracoes: next,
+                despesas: despesasAtualizadas,
+              }),
+          )
+          return
+        }
+
         await comPersistencia(
           () => syncConfiguracoes(next),
           () => set({ configuracoes: next }),

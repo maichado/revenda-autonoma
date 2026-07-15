@@ -24,6 +24,26 @@ export function valorPagoPorOrigem(
   return pessoaPessoal.trim()
 }
 
+/** Despesas cujo `pago_por` deve usar o rótulo atual do caixa da loja. */
+export function remapPagoPorCaixaRevenda(
+  despesas: Despesa[],
+  nomeRevendaNovo: string,
+  socios: string[],
+  nomeRevendaAnterior?: string,
+): Despesa[] {
+  const novoRotulo = rotuloCaixaRevenda(nomeRevendaNovo)
+  const anterior = nomeRevendaAnterior ?? nomeRevendaNovo
+
+  return despesas.map((d) => {
+    const eraCaixa =
+      resolverOrigemDespesa(d.pago_por, anterior, socios) === 'revenda' ||
+      resolverOrigemDespesa(d.pago_por, nomeRevendaNovo, socios) === 'revenda'
+    if (!eraCaixa) return d
+    if (d.pago_por === novoRotulo) return d
+    return { ...d, pago_por: novoRotulo }
+  })
+}
+
 export function rotuloCaixaRevenda(nomeRevenda: string): string {
   return `Caixa ${nomeRevenda.trim() || NOME_REVENDA_PADRAO}`
 }

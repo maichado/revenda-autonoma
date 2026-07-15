@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Paleta MG Revenda
+        // Paleta RVD Autônoma
         primary: {
           DEFAULT: '#C8A96E',
           50: '#FAF5EC',

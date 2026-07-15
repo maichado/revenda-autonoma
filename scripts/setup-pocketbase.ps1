@@ -11,7 +11,7 @@ $RootDir = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'load-pb-secrets.ps1') -RootDir $RootDir
 
 Write-Host ''
-Write-Host '=== Revenda Autônoma - Setup PocketBase ===' -ForegroundColor Cyan
+Write-Host '=== RVD Autônoma - Setup PocketBase ===' -ForegroundColor Cyan
 Write-Host ''
 
 try {
