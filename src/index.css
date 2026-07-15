@@ -1,0 +1,417 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Reset / base
+--------------------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply font-sans antialiased;
+  @apply bg-bg-light text-zinc-900;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark body {
+  @apply bg-bg-dark text-white;
+}
+
+/* Números com tabular figures — exigência da spec. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+/* ---------------------------------------------------------------------------
+   Scrollbar discreta
+--------------------------------------------------------------------------- */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.25);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 120, 0.45);
+}
+
+/* ---------------------------------------------------------------------------
+   Tokens reutilizáveis
+--------------------------------------------------------------------------- */
+@layer components {
+  .card {
+    @apply rounded-2xl border bg-surface-light border-border-light shadow-card;
+    @apply dark:bg-surface-dark dark:border-border-dark dark:shadow-card-dark;
+  }
+
+  .card-hover {
+    @apply transition-colors hover:border-primary/50 dark:hover:border-primary/50;
+  }
+
+  /* Micro-interação de clique exigida pela spec. */
+  .btn-press {
+    @apply transition-transform active:scale-[0.97];
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+
+  .table-row-zebra > tr:nth-child(even) {
+    @apply bg-zinc-50/50 dark:bg-white/[0.02];
+  }
+
+  .table-row-hover > tr {
+    @apply transition-colors hover:bg-primary/5 dark:hover:bg-primary/10;
+  }
+
+  .relatorio-container {
+    @apply space-y-6;
+  }
+
+  .input {
+    @apply w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none;
+    @apply border-border-light focus:border-primary focus:ring-2 focus:ring-primary/30;
+    @apply dark:bg-zinc-900 dark:border-border-dark dark:text-white;
+  }
+
+  .kbd {
+    @apply rounded border px-1.5 py-0.5 text-[10px] font-medium;
+    @apply border-border-light text-zinc-600 dark:border-border-dark dark:text-zinc-300;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   IMPRESSÃO / EXPORTAR PDF (módulo Relatórios)
+   ---------------------------------------------------------------------------
+   O botão "Exportar PDF" da página de Relatórios usa window.print(). As
+   regras abaixo garantem que apenas a área .print-area apareça no PDF,
+   com layout limpo e alto contraste.
+
+   - .print-only é o oposto de .no-print: visível só na impressão.
+   - .print-section ajuda a evitar quebras feias entre cards/tabela.
+   - A sidebar, header, bottom nav e os controles do seletor de período
+     são marcados com .no-print (ou utilitário print:hidden) e somem.
+--------------------------------------------------------------------------- */
+@media print {
+  /* Força paleta clara independente do tema da app — economiza tinta
+     e melhora legibilidade no PDF. */
+  :root {
+    color-scheme: light;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+  body {
+    font-size: 11pt;
+  }
+
+  /* Esconde toda a chrome do app durante a impressão. */
+  aside,
+  header,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  body > div,
+  body > div > div {
+    padding-left: 0 !important;
+  }
+
+  /* Área capturada para PDF / impressão. */
+  .relatorio-pdf-area,
+  .print-area {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: #111111 !important;
+  }
+
+  /* Elementos marcados como exclusivos de impressão aparecem. */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Evita que cards/seções fiquem cortados no meio da página. */
+  .print-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .card {
+    background: #ffffff !important;
+    color: #111111 !important;
+    border: 1px solid #d4d4d4 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Texto secundário fica legível mesmo sem o cinza claro do tema. */
+  .text-zinc-500,
+  .text-zinc-400,
+  .dark\:text-zinc-400,
+  .dark\:text-zinc-300 {
+    color: #555555 !important;
+  }
+
+  /* Tabela imprime ocupando toda a largura, sem scroll horizontal. */
+  .print-table {
+    overflow: visible !important;
+  }
+  .print-table table {
+    min-width: 0 !important;
+    width: 100% !important;
+    font-size: 9pt !important;
+  }
+  table {
+    border-collapse: collapse;
+  }
+  thead {
+    display: table-header-group; /* repete header em cada página */
+  }
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Preserva cores nas badges/lucros (Chrome/Edge). */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Garante quebra de página entre seções principais quando preciso. */
+  .page-break-before {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  /* Margens da página do PDF. */
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}
+
+/* Paleta clara durante captura html2canvas (tema escuro → PDF branco). */
+.relatorio-pdf-area.relatorio-pdf-capture {
+  width: 794px !important;
+  max-width: 794px !important;
+  min-width: 794px !important;
+  padding: 28px !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+  margin: 0 auto !important;
+  background: #ffffff !important;
+  color: #111111 !important;
+  border-color: #e5e5e5 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture * {
+  box-sizing: border-box;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture [data-pdf-section] {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  overflow: visible !important;
+  margin-bottom: 16px !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture [data-pdf-section]:last-child {
+  margin-bottom: 0 !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .card,
+.relatorio-pdf-area.relatorio-pdf-capture [data-pdf-section].card {
+  background: #ffffff !important;
+  color: #111111 !important;
+  border: 1px solid #e5e5e5 !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+  margin-bottom: 16px !important;
+  box-shadow: none !important;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  overflow: visible !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .card-hover {
+  transform: none !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .relatorio-cabecalho-inner {
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .relatorio-cabecalho-logo {
+  height: 40px !important;
+  max-width: 120px !important;
+  width: auto !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .relatorio-cabecalho-texto {
+  text-align: right !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .relatorio-cabecalho-texto h2 {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .bg-zinc-50,
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:bg-white\/\[0\.04\],
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:bg-white\/\[0\.03\] {
+  background: #f4f4f5 !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .bg-primary\/10 {
+  background: rgba(200, 169, 110, 0.12) !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .bg-emerald-500\/10 {
+  background: rgba(34, 197, 94, 0.1) !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .text-zinc-500,
+.relatorio-pdf-area.relatorio-pdf-capture .text-zinc-400,
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:text-zinc-400,
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:text-zinc-300,
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:text-zinc-200 {
+  color: #555555 !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .text-zinc-600,
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:text-zinc-300 {
+  color: #333333 !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .text-emerald-600,
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:text-emerald-400,
+.relatorio-pdf-area.relatorio-pdf-capture .text-emerald-700,
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:text-emerald-300 {
+  color: #059669 !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .relatorio-pdf-rodape {
+  color: #777777 !important;
+  border-color: #e5e5e5 !important;
+  margin-top: 24px !important;
+  padding-top: 24px !important;
+  font-size: 9px !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .overflow-x-auto {
+  overflow: visible !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .truncate {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .kpi-valor {
+  font-size: 1rem !important;
+  line-height: 1.35 !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .relatorio-pdf-tabela,
+.relatorio-pdf-area.relatorio-pdf-capture table {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .relatorio-pdf-tabela th,
+.relatorio-pdf-area.relatorio-pdf-capture .relatorio-pdf-tabela td,
+.relatorio-pdf-area.relatorio-pdf-capture table th,
+.relatorio-pdf-area.relatorio-pdf-capture table td {
+  padding: 8px !important;
+  vertical-align: top !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture [data-pdf-section='kpis'] .grid,
+.relatorio-pdf-area.relatorio-pdf-capture .relatorio-kpi-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture [data-pdf-section='estoque'] .grid,
+.relatorio-pdf-area.relatorio-pdf-capture [data-pdf-section='vendas'] .grid,
+.relatorio-pdf-area.relatorio-pdf-capture [data-pdf-section='destaques'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture [data-pdf-section='destaques'] > .card {
+  min-width: 0 !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .chart-screen-only {
+  display: none !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .chart-pdf-fallback,
+.relatorio-pdf-area.relatorio-pdf-capture .relatorio-pdf-tabela-fallback {
+  display: block !important;
+  visibility: visible !important;
+  overflow: visible !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .shadow-card,
+.relatorio-pdf-area.relatorio-pdf-capture .shadow-card-dark {
+  box-shadow: none !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture .border-border-light,
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:border-border-dark,
+.relatorio-pdf-area.relatorio-pdf-capture .border-zinc-200,
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:border-white\/10,
+.relatorio-pdf-area.relatorio-pdf-capture .dark\:border-white\/\[0\.06\] {
+  border-color: #e5e5e5 !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture [data-pdf-section='identificacao'] .flex-col {
+  flex-direction: row !important;
+}
+
+.relatorio-pdf-area.relatorio-pdf-capture [data-pdf-section='identificacao'] img {
+  max-height: 120px !important;
+  object-fit: cover !important;
+}
+
+

@@ -1,0 +1,282 @@
+[
+  {
+    "id": "_pb_users_auth_",
+    "name": "users",
+    "type": "auth",
+    "system": false,
+    "listRule": "id = @request.auth.id",
+    "viewRule": "id = @request.auth.id",
+    "createRule": "",
+    "updateRule": "id = @request.auth.id",
+    "deleteRule": "id = @request.auth.id",
+    "fields": [
+      { "name": "name", "type": "text", "required": false, "max": 255 },
+      {
+        "name": "avatar",
+        "type": "file",
+        "required": false,
+        "maxSelect": 1,
+        "mimeTypes": ["image/jpeg", "image/png", "image/svg+xml", "image/gif", "image/webp"]
+      },
+      { "name": "created", "type": "autodate", "onCreate": true, "onUpdate": false },
+      { "name": "updated", "type": "autodate", "onCreate": true, "onUpdate": true }
+    ]
+  },
+  {
+    "id": "col_veiculos",
+    "name": "veiculos",
+    "type": "base",
+    "system": false,
+    "fields": [
+      { "name": "placa", "type": "text", "required": true, "max": 10 },
+      { "name": "marca", "type": "text", "required": true },
+      { "name": "modelo", "type": "text", "required": true },
+      { "name": "ano", "type": "number", "required": true, "min": 1900, "max": 2100, "noDecimal": true },
+      { "name": "cor", "type": "text", "required": false },
+      { "name": "quilometragem", "type": "number", "required": false, "min": 0, "noDecimal": true },
+      { "name": "data_compra", "type": "text", "required": true, "max": 10 },
+      { "name": "valor_compra", "type": "number", "required": true, "min": 0, "noDecimal": false },
+      { "name": "valor_fipe", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "valor_venda_pretendido", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      {
+        "name": "status",
+        "type": "select",
+        "required": true,
+        "maxSelect": 1,
+        "values": ["em preparação", "disponível", "reservado", "vendido"]
+      },
+      { "name": "data_anuncio", "type": "text", "required": false, "max": 10 },
+      {
+        "name": "tipo_propriedade",
+        "type": "select",
+        "required": false,
+        "maxSelect": 1,
+        "values": ["solo", "meia"]
+      },
+      { "name": "socio_parceiro", "type": "text", "required": false, "max": 120 },
+      { "name": "observacoes", "type": "text", "required": false, "max": 5000 },
+      { "name": "fotos", "type": "json", "required": false, "maxSize": 2000000 },
+      { "name": "despesas_vinculadas", "type": "json", "required": false, "maxSize": 2000000 },
+      { "name": "compra_pessoal_reembolsada", "type": "bool", "required": false },
+      { "name": "investimento_pessoal_devolvido", "type": "bool", "required": false },
+      { "name": "compra_funding_revenda", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "compra_funding_investimento", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "compra_funding_pessoal", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "compra_funding_manual", "type": "bool", "required": false },
+      { "name": "compra_funding_investimento_meia_socio", "type": "bool", "required": false },
+      { "name": "compra_funding_revenda_meia_socio", "type": "bool", "required": false },
+      { "name": "compra_funding_pessoal_meia_socio", "type": "bool", "required": false },
+      { "name": "created", "type": "autodate", "onCreate": true, "onUpdate": false },
+      { "name": "updated", "type": "autodate", "onCreate": true, "onUpdate": true }
+    ],
+    "listRule": "@request.auth.id != ''",
+    "viewRule": "@request.auth.id != ''",
+    "createRule": "@request.auth.id != ''",
+    "updateRule": "@request.auth.id != ''",
+    "deleteRule": "@request.auth.id != ''"
+  },
+  {
+    "id": "col_compras",
+    "name": "compras",
+    "type": "base",
+    "system": false,
+    "fields": [
+      { "name": "data", "type": "text", "required": true, "max": 10 },
+      {
+        "name": "veiculo",
+        "type": "relation",
+        "required": true,
+        "collectionId": "col_veiculos",
+        "cascadeDelete": true,
+        "maxSelect": 1,
+        "displayFields": ["placa"]
+      },
+      { "name": "valor_pago", "type": "number", "required": true, "min": 0, "noDecimal": false },
+      { "name": "forma_pagamento", "type": "text", "required": false },
+      { "name": "vendedor_nome", "type": "text", "required": false },
+      { "name": "vendedor_contato", "type": "text", "required": false },
+      { "name": "origem", "type": "text", "required": false },
+      { "name": "observacoes", "type": "text", "required": false, "max": 5000 },
+      { "name": "created", "type": "autodate", "onCreate": true, "onUpdate": false },
+      { "name": "updated", "type": "autodate", "onCreate": true, "onUpdate": true }
+    ],
+    "listRule": "@request.auth.id != ''",
+    "viewRule": "@request.auth.id != ''",
+    "createRule": "@request.auth.id != ''",
+    "updateRule": "@request.auth.id != ''",
+    "deleteRule": "@request.auth.id != ''"
+  },
+  {
+    "id": "col_vendas",
+    "name": "vendas",
+    "type": "base",
+    "system": false,
+    "fields": [
+      { "name": "data", "type": "text", "required": true, "max": 10 },
+      {
+        "name": "veiculo",
+        "type": "relation",
+        "required": true,
+        "collectionId": "col_veiculos",
+        "cascadeDelete": false,
+        "maxSelect": 1,
+        "displayFields": ["placa"]
+      },
+      { "name": "comprador_nome", "type": "text", "required": false },
+      { "name": "comprador_cpf", "type": "text", "required": false, "max": 20 },
+      { "name": "comprador_contato", "type": "text", "required": false },
+      { "name": "valor_venda", "type": "number", "required": true, "min": 0, "noDecimal": false },
+      { "name": "forma_recebimento", "type": "text", "required": false },
+      { "name": "entrada", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "parcelas", "type": "number", "required": false, "min": 0, "max": 120, "noDecimal": true },
+      { "name": "observacoes", "type": "text", "required": false, "max": 5000 },
+      { "name": "created", "type": "autodate", "onCreate": true, "onUpdate": false },
+      { "name": "updated", "type": "autodate", "onCreate": true, "onUpdate": true }
+    ],
+    "listRule": "@request.auth.id != ''",
+    "viewRule": "@request.auth.id != ''",
+    "createRule": "@request.auth.id != ''",
+    "updateRule": "@request.auth.id != ''",
+    "deleteRule": "@request.auth.id != ''"
+  },
+  {
+    "id": "col_despesas",
+    "name": "despesas",
+    "type": "base",
+    "system": false,
+    "fields": [
+      { "name": "data", "type": "text", "required": true, "max": 10 },
+      {
+        "name": "tipo",
+        "type": "select",
+        "required": true,
+        "maxSelect": 1,
+        "values": ["manutenção", "documentação", "detalhamento", "frete", "taxa", "marketing", "outros"]
+      },
+      { "name": "descricao", "type": "text", "required": true, "max": 500 },
+      { "name": "valor", "type": "number", "required": true, "min": 0, "noDecimal": false },
+      {
+        "name": "veiculo",
+        "type": "relation",
+        "required": false,
+        "collectionId": "col_veiculos",
+        "cascadeDelete": false,
+        "maxSelect": 1,
+        "displayFields": ["placa"]
+      },
+      { "name": "pago", "type": "bool", "required": false },
+      { "name": "forma_pagamento", "type": "text", "required": false },
+      { "name": "pago_por", "type": "text", "required": false },
+      { "name": "reembolsado", "type": "bool", "required": false },
+      { "name": "created", "type": "autodate", "onCreate": true, "onUpdate": false },
+      { "name": "updated", "type": "autodate", "onCreate": true, "onUpdate": true }
+    ],
+    "listRule": "@request.auth.id != ''",
+    "viewRule": "@request.auth.id != ''",
+    "createRule": "@request.auth.id != ''",
+    "updateRule": "@request.auth.id != ''",
+    "deleteRule": "@request.auth.id != ''"
+  },
+  {
+    "id": "col_configuracoes",
+    "name": "configuracoes",
+    "type": "base",
+    "system": false,
+    "fields": [
+      { "name": "slug", "type": "text", "required": true, "max": 50 },
+      { "name": "nome_revenda", "type": "text", "required": true },
+      { "name": "socios", "type": "json", "required": false, "maxSize": 2000000 },
+      { "name": "meta_lucro_mensal", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "capital_inicial_pessoal", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "created", "type": "autodate", "onCreate": true, "onUpdate": false },
+      { "name": "updated", "type": "autodate", "onCreate": true, "onUpdate": true }
+    ],
+    "listRule": "@request.auth.id != ''",
+    "viewRule": "@request.auth.id != ''",
+    "createRule": "@request.auth.id != ''",
+    "updateRule": "@request.auth.id != ''",
+    "deleteRule": "@request.auth.id != ''"
+  },
+  {
+    "id": "col_simulacoes",
+    "name": "simulacoes",
+    "type": "base",
+    "system": false,
+    "fields": [
+      { "name": "titulo", "type": "text", "required": false, "max": 120 },
+      { "name": "data", "type": "text", "required": true, "max": 10 },
+      { "name": "preco_compra", "type": "number", "required": true, "min": 0, "noDecimal": false },
+      { "name": "valor_fipe", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "preco_venda", "type": "number", "required": true, "min": 0, "noDecimal": false },
+      { "name": "despesas_estimadas", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "observacoes", "type": "text", "required": false, "max": 2000 },
+      { "name": "created", "type": "autodate", "onCreate": true, "onUpdate": false },
+      { "name": "updated", "type": "autodate", "onCreate": true, "onUpdate": true }
+    ],
+    "listRule": "@request.auth.id != ''",
+    "viewRule": "@request.auth.id != ''",
+    "createRule": "@request.auth.id != ''",
+    "updateRule": "@request.auth.id != ''",
+    "deleteRule": "@request.auth.id != ''"
+  },
+  {
+    "id": "col_bp_carros",
+    "name": "bp_carros",
+    "type": "base",
+    "system": false,
+    "fields": [
+      { "name": "nome", "type": "text", "required": true, "max": 120 },
+      {
+        "name": "status",
+        "type": "select",
+        "required": true,
+        "maxSelect": 1,
+        "values": ["em_estoque", "reservado", "vendido"]
+      },
+      { "name": "valor_compra", "type": "number", "required": true, "min": 0, "noDecimal": false },
+      { "name": "custo_reforma", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "valor_venda", "type": "number", "required": false, "min": 0, "noDecimal": false },
+      { "name": "created", "type": "autodate", "onCreate": true, "onUpdate": false },
+      { "name": "updated", "type": "autodate", "onCreate": true, "onUpdate": true }
+    ],
+    "listRule": "@request.auth.id != ''",
+    "viewRule": "@request.auth.id != ''",
+    "createRule": "@request.auth.id != ''",
+    "updateRule": "@request.auth.id != ''",
+    "deleteRule": "@request.auth.id != ''"
+  },
+  {
+    "id": "col_bp_lancamentos",
+    "name": "bp_lancamentos",
+    "type": "base",
+    "system": false,
+    "fields": [
+      {
+        "name": "carro",
+        "type": "relation",
+        "required": true,
+        "collectionId": "col_bp_carros",
+        "cascadeDelete": true,
+        "maxSelect": 1,
+        "displayFields": ["nome"]
+      },
+      { "name": "descricao", "type": "text", "required": true, "max": 500 },
+      { "name": "valor", "type": "number", "required": true, "min": 0, "noDecimal": false },
+      { "name": "data", "type": "text", "required": true, "max": 10 },
+      {
+        "name": "status",
+        "type": "select",
+        "required": true,
+        "maxSelect": 1,
+        "values": ["a_devolver", "devolvido"]
+      },
+      { "name": "created", "type": "autodate", "onCreate": true, "onUpdate": false },
+      { "name": "updated", "type": "autodate", "onCreate": true, "onUpdate": true }
+    ],
+    "listRule": "@request.auth.id != ''",
+    "viewRule": "@request.auth.id != ''",
+    "createRule": "@request.auth.id != ''",
+    "updateRule": "@request.auth.id != ''",
+    "deleteRule": "@request.auth.id != ''"
+  }
+]

@@ -1,0 +1,43 @@
+# Dependências e build
+node_modules/
+dist/
+dist-ssr/
+.vite/
+
+# Cache TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+tsconfig.node.tsbuildinfo
+
+# Variáveis de ambiente e segredos (NUNCA commitar)
+.env
+.env.local
+.env.development.local
+.env.production.local
+.env.pb.local
+scripts/secrets.ps1
+
+# PocketBase em runtime (binário + banco SQLite)
+# A pasta irmã gm-revenda-pb é criada pelos scripts fora deste repo
+../gm-revenda-pb/
+gm-revenda-pb/
+pocketbase/pb_data/
+pocketbase/pocketbase.exe
+pocketbase/*.zip
+
+# Backups locais do banco
+pb_data_backup_*/
+*.db-journal
+*.sqlite-journal
+
+# Logs e temporários
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE (opcional — extensions.json pode ser compartilhado)
+.idea/
+.vscode/*
+!.vscode/extensions.json
