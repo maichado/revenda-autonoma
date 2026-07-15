@@ -57,7 +57,7 @@ Roda **no seu PC** com frontend React e backend **PocketBase** local (gratuito, 
 
 ```
 Seu computador
-├── gm-revenda/              ← este repositório (frontend + scripts + schema)
+├── revenda-autonoma/        ← este repositório (frontend + scripts + schema)
 │   ├── src/                 ← código React
 │   ├── pocketbase/
 │   │   └── pb_schema.json   ← estrutura das collections (versionada)
