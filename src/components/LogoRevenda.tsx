@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Car } from 'lucide-react'
 import { NOME_REVENDA_PADRAO } from '@/constants/marca'
 
-const LOGO_SRC = '/logo-revenda.png?v=rvd-autonoma'
+const LOGO_SRC = '/logo-revenda.png?v=transparent2'
 
 interface Props {
   /** Altura em px — padrão 40 (header/sidebar expandida). */
@@ -53,12 +53,10 @@ export function LogoRevenda({
     <img
       src={LOGO_SRC}
       alt={rotulo}
-      className={[
-        'mx-auto block w-auto shrink-0 object-contain',
-        'rounded-md',
-        className,
-      ].join(' ')}
-      style={{ height, maxWidth: height * 2.2 }}
+      className={['mx-auto block w-auto shrink-0 object-contain', className].join(
+        ' ',
+      )}
+      style={{ height, maxWidth: height * 2.2, background: 'transparent' }}
       onError={() => setErro(true)}
     />
   )
