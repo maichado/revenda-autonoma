@@ -544,6 +544,12 @@
         "required": true
       },
       {
+        "name": "logo_revenda",
+        "type": "text",
+        "required": false,
+        "max": 1400000
+      },
+      {
         "name": "socios",
         "type": "json",
         "required": false,

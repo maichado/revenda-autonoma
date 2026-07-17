@@ -39,6 +39,7 @@ import {
 import { Button } from '@/components/Button'
 import { ConfigSection } from '@/components/ConfigSection'
 import { ImportarExportarPainel } from '@/components/ImportarExportarPainel'
+import { LogoUploader } from '@/components/LogoUploader'
 import { MigrarLocalStoragePainel } from '@/components/MigrarLocalStoragePainel'
 import { KpiCard } from '@/components/KpiCard'
 import { MoedaInput } from '@/components/MoedaInput'
@@ -60,6 +61,7 @@ export default function Configuracoes() {
   // -------- Forms locais ---------------------------------------------------
   // Mantemos o "rascunho" em estado local pra permitir cancelar sem salvar.
   const [nomeRascunho, setNomeRascunho] = useState(configuracoes.nome_revenda)
+  const [logoRascunho, setLogoRascunho] = useState(configuracoes.logo_revenda)
   const [metaRascunho, setMetaRascunho] = useState(
     configuracoes.meta_lucro_mensal,
   )
@@ -78,6 +80,9 @@ export default function Configuracoes() {
   useEffect(() => {
     setNomeRascunho(configuracoes.nome_revenda)
   }, [configuracoes.nome_revenda])
+  useEffect(() => {
+    setLogoRascunho(configuracoes.logo_revenda)
+  }, [configuracoes.logo_revenda])
   useEffect(() => {
     setMetaRascunho(configuracoes.meta_lucro_mensal)
   }, [configuracoes.meta_lucro_mensal])
@@ -108,6 +113,8 @@ export default function Configuracoes() {
     nomeNormalizado.length >= LIMITE_NOME_MIN &&
     nomeNormalizado.length <= LIMITE_NOME_MAX
   const nomeAlterado = nomeNormalizado !== configuracoes.nome_revenda
+
+  const logoNormalizada = logoRascunho.trim()
 
   const metaValida = metaRascunho >= 0
   const metaAlterada = metaRascunho !== configuracoes.meta_lucro_mensal
@@ -143,6 +150,18 @@ export default function Configuracoes() {
       () => updateConfiguracoes({ nome_revenda: nomeNormalizado }),
       'Nome atualizado',
       `Revenda: "${nomeNormalizado}". Em Despesas o caixa passa a ser ${rotuloCaixaRevenda(nomeNormalizado)}.`,
+    )
+  }
+
+  async function salvarLogo(logo: string) {
+    const normalizada = logo.trim()
+    setLogoRascunho(normalizada)
+    await salvarServidor(
+      () => updateConfiguracoes({ logo_revenda: normalizada }),
+      normalizada ? 'Logo atualizada' : 'Logo removida',
+      normalizada
+        ? 'A nova logo aparece na sidebar, login e relatórios.'
+        : 'Voltou a usar a logo padrão do sistema.',
     )
   }
 
@@ -223,8 +242,16 @@ export default function Configuracoes() {
       <ConfigSection
         icone={<Building2 size={20} />}
         titulo="Identidade"
-        descricao="Nome da loja no sistema. Em Despesas, o caixa da empresa aparece como “Caixa {seu nome}” em Quem pagou."
+        descricao="Nome da loja e logo no sistema. Em Despesas, o caixa da empresa aparece como “Caixa {seu nome}” em Quem pagou."
       >
+        <LogoUploader
+          logoAtual={logoRascunho}
+          nomeRevenda={nomeNormalizado || configuracoes.nome_revenda}
+          onSalvar={salvarLogo}
+        />
+
+        <div className="my-6 border-t border-border-light dark:border-border-dark" />
+
         <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
           <label className="block">
             <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">

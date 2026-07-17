@@ -201,8 +201,10 @@ export function despesaToPb(d: Despesa): Record<string, unknown> {
 
 export function configuracoesFromPb(r: RecordModel): Configuracoes {
   const nome = String(r.nome_revenda ?? '').trim()
+  const logo = typeof r.logo_revenda === 'string' ? r.logo_revenda.trim() : ''
   return {
     nome_revenda: nome || NOME_REVENDA_PADRAO,
+    logo_revenda: logo,
     socios: [...normalizarListaSocios(Array.isArray(r.socios) ? (r.socios as string[]) : [])],
     meta_lucro_mensal: Number(r.meta_lucro_mensal ?? 0),
     capital_inicial_pessoal: Number(
@@ -219,6 +221,7 @@ export function configuracoesToPb(
   return {
     slug,
     nome_revenda: nome || NOME_REVENDA_PADRAO,
+    logo_revenda: (c.logo_revenda ?? '').trim(),
     socios: Array.isArray(c.socios) ? c.socios : [],
     meta_lucro_mensal: c.meta_lucro_mensal,
     capital_inicial_pessoal: c.capital_inicial_pessoal,

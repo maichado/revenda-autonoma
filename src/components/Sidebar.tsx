@@ -42,6 +42,7 @@ export const navItems: NavItem[] = [
 export function Sidebar() {
   const colapsada = useStore((s) => s.sidebarColapsada)
   const setColapsada = useStore((s) => s.setSidebarColapsada)
+  const nomeRevenda = useStore((s) => s.configuracoes.nome_revenda)
   const { logout, user } = useAuth()
 
   return (
@@ -57,7 +58,10 @@ export function Sidebar() {
     >
       {/* Logo / topo */}
       <div className="flex w-full items-center justify-center border-b border-border-light px-3 py-4 dark:border-border-dark">
-        <LogoRevenda height={colapsada ? 32 : 44} />
+        <LogoRevenda
+          height={colapsada ? 32 : 44}
+          nomeRevenda={nomeRevenda}
+        />
       </div>
 
       {/* Links */}

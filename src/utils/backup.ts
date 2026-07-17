@@ -370,6 +370,8 @@ function normalizarEstadoBackup(
     despesas,
     configuracoes: {
       nome_revenda: normalizarNomeRevenda(cfg.nome_revenda),
+      logo_revenda:
+        typeof cfg.logo_revenda === 'string' ? cfg.logo_revenda.trim() : '',
       socios: [...normalizarListaSocios(Array.isArray(cfg.socios) ? cfg.socios : [])],
       meta_lucro_mensal: Number(cfg.meta_lucro_mensal ?? 0),
       capital_inicial_pessoal: Number(cfg.capital_inicial_pessoal ?? 38000),

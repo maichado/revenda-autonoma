@@ -210,6 +210,8 @@ export interface Despesa {
 
 export interface Configuracoes {
   nome_revenda: string
+  /** Data URL (base64) da logo customizada; vazio = logo padrão do sistema. */
+  logo_revenda: string
   socios: string[]
   meta_lucro_mensal: number
   /** Capital pessoal inicial do dono (sócio principal) no negócio. */

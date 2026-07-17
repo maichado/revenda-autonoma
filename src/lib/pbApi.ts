@@ -653,6 +653,7 @@ export async function criarConfiguracoesIniciais(
     tenant,
     slug: tenant,
     nome_revenda: nomeRevenda?.trim() || 'Minha Revenda',
+    logo_revenda: '',
     socios: ['Sócio principal', 'Sócio parceiro'],
     meta_lucro_mensal: CONFIGURACOES_PADRAO.meta_lucro_mensal,
     capital_inicial_pessoal: CONFIGURACOES_PADRAO.capital_inicial_pessoal,
