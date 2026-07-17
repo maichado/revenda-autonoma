@@ -30,6 +30,7 @@ const VEICULOS_FUNDING_SOCIO_PROBE_FIELD = 'compra_funding_pessoal_meia_socio'
 const VEICULOS_DATA_ANUNCIO_PROBE_FIELD = 'data_anuncio'
 const CONFIGURACOES_COLLECTION = 'configuracoes'
 const CONFIGURACOES_CAPITAL_PROBE_FIELD = 'capital_inicial_pessoal'
+const TENANT_PROBE_FIELD = 'tenant'
 const AUTODATE_PROBE_FIELD = 'created'
 
 export async function checkPbHealth() {
@@ -211,6 +212,14 @@ export function needsSchemaImport(collections) {
       needed: true,
       reason:
         'collection configuracoes sem campo capital_inicial_pessoal — reimporte pocketbase/pb_schema.json',
+    }
+  }
+
+  if (!fieldNames.includes(TENANT_PROBE_FIELD)) {
+    return {
+      needed: true,
+      reason:
+        'collections sem campo tenant (isolamento por conta) — reimporte pocketbase/pb_schema.json e rode scripts/migrar-tenant.js',
     }
   }
 

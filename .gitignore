@@ -15,7 +15,10 @@ tsconfig.node.tsbuildinfo
 .env.development.local
 .env.production.local
 .env.pb.local
+.env.ngrok.local
 scripts/secrets.ps1
+ngrok.yml
+ngrok-url.txt
 
 # PocketBase em runtime (binário + banco SQLite)
 # Pasta de dados PocketBase (irmã do repositório — fora do Git)
@@ -36,6 +39,7 @@ pb_data_backup_*/
 # Logs e temporários
 *.log
 npm-debug.log*
+.tools/
 .DS_Store
 Thumbs.db
 Desktop.ini

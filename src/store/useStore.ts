@@ -331,37 +331,34 @@ export const useStore = create<EstadoApp>()(
         const renomeouCaixa =
           !!nomeNovo && nomeNovo !== nomeAntigo
 
-        if (renomeouCaixa) {
-          const despesasAtuais = get().despesas
-          const despesasAtualizadas = remapPagoPorCaixaRevenda(
-            despesasAtuais,
-            nomeNovo,
-            next.socios,
-            nomeAntigo,
-          )
-          const alteradas = despesasAtualizadas.filter(
-            (d, i) => d.pago_por !== despesasAtuais[i]?.pago_por,
-          )
-
-          await comPersistencia(
-            async () => {
-              await syncConfiguracoes(next)
-              for (const d of alteradas) {
-                await syncDespesaUpdate(d.id, { pago_por: d.pago_por })
-              }
-            },
-            () =>
-              set({
-                configuracoes: next,
-                despesas: despesasAtualizadas,
-              }),
-          )
-          return
-        }
-
+        // Configurações sempre primeiro — nome/meta/sócios não se perdem se
+        // o remapeamento de despesas falhar depois.
         await comPersistencia(
           () => syncConfiguracoes(next),
           () => set({ configuracoes: next }),
+        )
+
+        if (!renomeouCaixa) return
+
+        const despesasAtuais = get().despesas
+        const despesasAtualizadas = remapPagoPorCaixaRevenda(
+          despesasAtuais,
+          nomeNovo,
+          next.socios,
+          nomeAntigo,
+        )
+        const alteradas = despesasAtualizadas.filter(
+          (d, i) => d.pago_por !== despesasAtuais[i]?.pago_por,
+        )
+        if (alteradas.length === 0) return
+
+        await comPersistencia(
+          async () => {
+            for (const d of alteradas) {
+              await syncDespesaUpdate(d.id, { pago_por: d.pago_por })
+            }
+          },
+          () => set({ despesas: despesasAtualizadas }),
         )
       },
 

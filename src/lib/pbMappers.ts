@@ -1,5 +1,5 @@
 import type { RecordModel } from 'pocketbase'
-import { normalizarNomeRevenda } from '@/constants/marca'
+import { NOME_REVENDA_PADRAO } from '@/constants/marca'
 import { normalizarListaSocios } from '@/utils/socios'
 import type {
   Compra,
@@ -200,8 +200,9 @@ export function despesaToPb(d: Despesa): Record<string, unknown> {
 }
 
 export function configuracoesFromPb(r: RecordModel): Configuracoes {
+  const nome = String(r.nome_revenda ?? '').trim()
   return {
-    nome_revenda: normalizarNomeRevenda(r.nome_revenda),
+    nome_revenda: nome || NOME_REVENDA_PADRAO,
     socios: [...normalizarListaSocios(Array.isArray(r.socios) ? (r.socios as string[]) : [])],
     meta_lucro_mensal: Number(r.meta_lucro_mensal ?? 0),
     capital_inicial_pessoal: Number(
@@ -210,10 +211,14 @@ export function configuracoesFromPb(r: RecordModel): Configuracoes {
   }
 }
 
-export function configuracoesToPb(c: Configuracoes): Record<string, unknown> {
+export function configuracoesToPb(
+  c: Configuracoes,
+  slug = 'default',
+): Record<string, unknown> {
+  const nome = (c.nome_revenda ?? '').trim()
   return {
-    slug: 'default',
-    nome_revenda: c.nome_revenda,
+    slug,
+    nome_revenda: nome || NOME_REVENDA_PADRAO,
     socios: Array.isArray(c.socios) ? c.socios : [],
     meta_lucro_mensal: c.meta_lucro_mensal,
     capital_inicial_pessoal: c.capital_inicial_pessoal,

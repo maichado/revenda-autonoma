@@ -59,6 +59,8 @@ Write-Host 'Setup concluido!' -ForegroundColor Green
 Write-Host ''
 Write-Host 'Login no app:' -ForegroundColor White
 Write-Host '  admin@revenda.local / RevendaAutonoma2024!' -ForegroundColor Gray
+Write-Host '  adminmaicon / adminmaicon' -ForegroundColor Gray
+Write-Host '  cristiano@cristiano.com / cristiano' -ForegroundColor Gray
 Write-Host ''
 Write-Host 'Inicie o frontend: npm run dev' -ForegroundColor White
 Write-Host ''

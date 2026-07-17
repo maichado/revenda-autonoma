@@ -50,11 +50,19 @@ import {
 
 
 
+  criarConfiguracoesIniciais,
+
+
+
   fetchAllData,
 
 
 
   formatPbError,
+
+
+
+  garantirTenantUsuario,
 
 
 
@@ -93,7 +101,11 @@ import {
 
 } from '@/store/pbSyncBridge'
 
-
+function normalizarIdentidadeLogin(identity: string): string {
+  const t = identity.trim()
+  if (!t || t.includes('@')) return t
+  return `${t}@revenda.local`
+}
 
 
 
@@ -112,6 +124,10 @@ interface AuthContextValue {
 
 
   login: (email: string, password: string) => Promise<void>
+
+
+
+  register: (nome: string, email: string, password: string) => Promise<void>
 
 
 
@@ -213,6 +229,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (!pb.authStore.isValid) return 'ok'
+
+      await garantirTenantUsuario()
 
       const dados = await fetchAllData()
       const { simulacoesColecaoOk, ...estado } = dados
@@ -321,9 +339,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
 
-      await pb.collection('users').authWithPassword(email.trim(), password)
+      await pb.collection('users').authWithPassword(
+        normalizarIdentidadeLogin(email),
+        password,
+      )
 
-
+      await garantirTenantUsuario()
 
       setPbSyncEnabled(true)
 
@@ -373,6 +394,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
 
+  const register = useCallback(
+    async (nome: string, email: string, password: string) => {
+      const identity = email.trim().toLowerCase()
+      if (!identity.includes('@')) {
+        throw new Error('Informe um e-mail válido para criar a conta.')
+      }
+
+      const record = await pb.collection('users').create({
+        email: identity,
+        emailVisibility: true,
+        password,
+        passwordConfirm: password,
+        name: nome.trim(),
+      })
+
+      await pb.collection('users').authWithPassword(identity, password)
+      await pb.collection('users').update(record.id, { tenant: record.id })
+      await pb.collection('users').authRefresh()
+
+      setPbSyncEnabled(true)
+      await criarConfiguracoesIniciais(record.id, nome.trim())
+
+      const result = await carregarDados()
+      if (result === 'missing_collections') {
+        pb.authStore.clear()
+        setPbSyncEnabled(false)
+        setUser(null)
+        throw new PbCollectionMissingError()
+      }
+    },
+    [carregarDados],
+  )
+
   const logout = useCallback(() => {
 
 
@@ -413,11 +467,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
 
-    () => ({ user, loading, login, logout }),
+    () => ({ user, loading, login, register, logout }),
 
 
 
-    [user, loading, login, logout],
+    [user, loading, login, register, logout],
 
 
 

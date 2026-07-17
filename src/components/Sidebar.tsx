@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { LogoRevenda } from '@/components/LogoRevenda'
+import { AssinaturaAutor } from '@/components/AssinaturaAutor'
 import { useAuth } from '@/contexts/AuthContext'
 import { useStore } from '@/store/useStore'
 
@@ -88,6 +89,11 @@ export function Sidebar() {
 
       {/* Rodapé: usuário + logout + colapso */}
       <div className="space-y-1 border-t border-border-light p-2 dark:border-border-dark">
+        {!colapsada && (
+          <div className="px-3 pb-1 text-center">
+            <AssinaturaAutor />
+          </div>
+        )}
         {!colapsada && user && (
           <p className="truncate px-3 py-1 text-[10px] text-zinc-500 dark:text-zinc-400">
             {user.email}

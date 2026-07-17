@@ -167,10 +167,15 @@ Abra **http://localhost:5173**
 
 ### 6. Primeiro login no app
 
-Após o `setup-pocketbase.ps1` (feito pelo script acima), use o usuário criado pelo seed:
+Após o `setup-pocketbase.ps1` (feito pelo script acima), use um dos usuários criados pelo seed:
 
-- **E-mail:** `admin@revenda.local`
-- **Senha inicial de dev:** `RevendaAutonoma2024!` (altere em **Collections → users** no admin)
+| Usuário | Senha (dev) |
+|---------|-------------|
+| `admin@revenda.local` | `RevendaAutonoma2024!` |
+| `adminmaicon` (ou `adminmaicon@revenda.local`) | `adminmaicon` |
+| `cristiano@cristiano.com` | `cristiano` |
+
+Altere as senhas em **Collections → users** no painel admin. Novos usuários também podem ser criados lá.
 
 ---
 
@@ -199,6 +204,33 @@ npm run start:dev
 | App | http://localhost:5173 |
 | PocketBase API | http://127.0.0.1:8090 |
 | Painel admin PB | http://127.0.0.1:8090/_/ |
+
+### Dev remoto com ngrok (colega em outro lugar)
+
+Um **único link** ngrok basta: o Vite repassa `/api` e `/_/` para o PocketBase no seu PC.
+
+**1. Instale o ngrok** (uma vez): [ngrok.com/download](https://ngrok.com/download)
+
+```powershell
+ngrok config add-authtoken SEU_TOKEN
+# opcional: copy ngrok.yml.example ngrok.yml
+```
+
+**2. Com PocketBase rodando**, inicie o túnel + frontend:
+
+```powershell
+.\scripts\start-pocketbase.ps1    # terminal 1 (se ainda não estiver ativo)
+npm run dev:ngrok                 # terminal 2 — mostra a URL https://....ngrok-free.app
+```
+
+**3. Envie o link** (também gravado em `ngrok-url.txt`) para o dev remoto. Ele abre no navegador, faz login e usa o **mesmo banco** do seu PocketBase local.
+
+| Quem | O que faz |
+|------|-----------|
+| **Você (host)** | Mantém PC ligado, PocketBase + `npm run dev:ngrok` |
+| **Dev remoto** | Abre só o link ngrok — não precisa clonar repo nem rodar PB |
+
+Inspector de requisições: http://127.0.0.1:4040
 
 ### Build de produção (opcional)
 

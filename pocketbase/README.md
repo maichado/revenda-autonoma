@@ -26,7 +26,7 @@ Painel admin: http://127.0.0.1:8090/_/
 
 **Collections → users → New record** no painel admin (ver README principal).
 
-## Credenciais
+## Credenciais (seed de desenvolvimento)
 
 - **Superuser PB:** apenas no seu `.env.pb.local` (não versionado)
-- **Usuário app (seed):** `admin@revenda.local` — troque a senha após o primeiro acesso
+- **App:** `admin@revenda.local`, `adminmaicon@revenda.local`, `cristiano@cristiano.com` — senhas no `scripts/seed-pocketbase.js` (troque após o primeiro acesso)

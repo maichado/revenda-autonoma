@@ -183,7 +183,7 @@ export default function Configuracoes() {
         <h1 className="text-2xl font-semibold tracking-tight">Configurações</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Identidade da revenda, meta de lucro, sócios e backup completo dos
-          dados. Tudo persistido localmente no navegador.
+          dados. Alterações são salvas no PocketBase ao clicar em Salvar.
         </p>
       </header>
 

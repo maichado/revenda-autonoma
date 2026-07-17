@@ -10,15 +10,31 @@ export default defineConfig({
         },
     },
     server: {
-        host: 'localhost',
+        host: true,
         port: 5173,
         strictPort: true,
         open: true,
+        allowedHosts: true,
+        proxy: {
+            '/api': {
+                target: 'http://127.0.0.1:8090',
+                changeOrigin: true,
+            },
+            '/_': {
+                target: 'http://127.0.0.1:8090',
+                changeOrigin: true,
+            },
+        },
     },
     preview: {
-        host: 'localhost',
+        host: true,
         port: 5173,
         strictPort: true,
         open: false,
+        allowedHosts: true,
+        proxy: {
+            '/api': { target: 'http://127.0.0.1:8090', changeOrigin: true },
+            '/_': { target: 'http://127.0.0.1:8090', changeOrigin: true },
+        },
     },
 });

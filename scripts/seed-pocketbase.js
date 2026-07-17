@@ -23,13 +23,28 @@ import {
 
 const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL
 const ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD
+const TENANT_PRINCIPAL = 'rvd-autonoma-principal'
 
-const USUARIO_INICIAL = {
-  email: 'admin@revenda.local',
-  password: 'RevendaAutonoma2024!',
-  passwordConfirm: 'RevendaAutonoma2024!',
-  name: 'Administrador',
-}
+const USUARIOS_INICIAIS = [
+  {
+    email: 'admin@revenda.local',
+    password: 'RevendaAutonoma2024!',
+    passwordConfirm: 'RevendaAutonoma2024!',
+    name: 'Administrador',
+  },
+  {
+    email: 'adminmaicon@revenda.local',
+    password: 'adminmaicon',
+    passwordConfirm: 'adminmaicon',
+    name: 'Maicon Machado',
+  },
+  {
+    email: 'cristiano@cristiano.com',
+    password: 'cristiano',
+    passwordConfirm: 'cristiano',
+    name: 'Cristiano',
+  },
+]
 
 async function authAdmin() {
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
@@ -60,6 +75,7 @@ async function criarUsuario(token, usersCollectionName, usuario) {
       body: JSON.stringify({
         ...usuario,
         emailVisibility: true,
+        tenant: usuario.tenant ?? TENANT_PRINCIPAL,
       }),
     },
   )
@@ -85,7 +101,8 @@ async function criarConfigPadrao(token) {
       headers: authHeaders(token),
       body: JSON.stringify({
         id: 'config-default',
-        slug: 'default',
+        slug: TENANT_PRINCIPAL,
+        tenant: TENANT_PRINCIPAL,
         nome_revenda: 'RVD Autônoma',
         socios: ['Sócio principal', 'Sócio parceiro'],
         meta_lucro_mensal: 20000,
@@ -134,16 +151,20 @@ async function main() {
     )
   }
 
-  console.log('Admin autenticado. Criando usuário do app...')
+  console.log('Admin autenticado. Criando usuários do app...')
 
-  await criarUsuario(token, usersCollection.name, USUARIO_INICIAL)
+  for (const usuario of USUARIOS_INICIAIS) {
+    await criarUsuario(token, usersCollection.name, usuario)
+  }
 
   console.log('Criando configurações padrão (sem dados de negócio)...')
   await criarConfigPadrao(token)
 
   console.log('')
-  console.log('Concluído! Login no app:')
+  console.log('Concluído! Logins no app:')
   console.log('  admin@revenda.local / RevendaAutonoma2024!')
+  console.log('  adminmaicon / adminmaicon')
+  console.log('  cristiano@cristiano.com / cristiano')
 }
 
 main().catch((err) => {

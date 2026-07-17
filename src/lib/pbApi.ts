@@ -56,7 +56,6 @@ import {
 } from '@/lib/pbMappers'
 
 import {
-
   normalizarDataPb,
 
   prepareDespesaParaImportPb,
@@ -65,9 +64,8 @@ import {
 
 } from '@/lib/pbImportPrep'
 
-
-
-const CONFIG_SLUG = 'default'
+import { filtrosConfiguracoes, tenantAtual, withTenant } from '@/lib/pbTenant'
+import { TENANT_PRINCIPAL } from '@/constants/tenant'
 
 
 
@@ -357,10 +355,7 @@ export async function fetchAllData(): Promise<
           pb.collection('compras').getFullList({ sort: '-data' }),
           pb.collection('vendas').getFullList({ sort: '-data' }),
           pb.collection('despesas').getFullList({ sort: '-data' }),
-          pb
-            .collection('configuracoes')
-            .getList(1, 1, { filter: `slug = "${CONFIG_SLUG}"` })
-            .catch(() => ({ items: [] as never[] })),
+          buscarConfiguracoesPb(),
         ]),
         FETCH_TIMEOUT_MS,
         'Carregamento dos dados',
@@ -370,9 +365,9 @@ export async function fetchAllData(): Promise<
 
     const configuracoes =
 
-      configRes.items.length > 0
+      configRes
 
-        ? configuracoesFromPb(configRes.items[0])
+        ? configuracoesFromPb(configRes)
 
         : { ...CONFIGURACOES_PADRAO }
 
@@ -413,7 +408,7 @@ export async function fetchAllData(): Promise<
 
 export async function syncVeiculoCreate(v: Veiculo): Promise<void> {
 
-  await pb.collection('veiculos').create(preparePbCreateBody(veiculoToPb(v)))
+  await pb.collection('veiculos').create(withTenant(preparePbCreateBody(veiculoToPb(v))))
 
 }
 
@@ -447,7 +442,7 @@ export async function syncVeiculoDelete(id: string): Promise<void> {
 
 export async function syncCompraCreate(c: Compra): Promise<void> {
 
-  await pb.collection('compras').create(preparePbCreateBody(compraToPb(c)))
+  await pb.collection('compras').create(withTenant(preparePbCreateBody(compraToPb(c))))
 
 }
 
@@ -481,7 +476,7 @@ export async function syncCompraDelete(id: string): Promise<void> {
 
 export async function syncVendaCreate(v: Venda): Promise<void> {
 
-  await pb.collection('vendas').create(preparePbCreateBody(vendaToPb(v)))
+  await pb.collection('vendas').create(withTenant(preparePbCreateBody(vendaToPb(v))))
 
 }
 
@@ -521,7 +516,7 @@ export async function syncDespesaCreate(d: Despesa): Promise<void> {
 
     .collection('despesas')
 
-    .create(preparePbCreateBody(despesaToPb(prepared)))
+    .create(withTenant(preparePbCreateBody(despesaToPb(prepared))))
 
 }
 
@@ -565,7 +560,7 @@ export async function syncSimulacaoCreate(s: SimulacaoNegocio): Promise<void> {
   try {
     await pb
       .collection('simulacoes')
-      .create(preparePbCreateBody(simulacaoToPb(s)))
+      .create(withTenant(preparePbCreateBody(simulacaoToPb(s))))
   } catch (err) {
     if (isCollectionMissingError(err)) {
       throw new PbCollectionMissingError(
@@ -604,25 +599,64 @@ export async function limparSimulacoesPb(): Promise<void> {
 
 
 export async function syncConfiguracoes(c: Configuracoes): Promise<void> {
+  const tenant = tenantAtual()
+  const body = { ...configuracoesToPb(c, tenant), tenant }
+  const filters = filtrosConfiguracoes()
 
-  const body = configuracoesToPb(c)
-
-  const existing = await pb
-
-    .collection('configuracoes')
-
-    .getList(1, 1, { filter: `slug = "${CONFIG_SLUG}"` })
-
-  if (existing.items.length > 0) {
-
-    await pb.collection('configuracoes').update(existing.items[0].id, body)
-
-  } else {
-
-    await pb.collection('configuracoes').create(body)
-
+  for (const filter of filters) {
+    try {
+      const existing = await pb
+        .collection('configuracoes')
+        .getFirstListItem(filter)
+      await pb.collection('configuracoes').update(existing.id, body)
+      return
+    } catch (err: unknown) {
+      const status =
+        err && typeof err === 'object' && 'status' in err
+          ? Number((err as { status: number }).status)
+          : 0
+      if (status !== 404) throw err
+    }
   }
 
+  await pb.collection('configuracoes').create(body)
+}
+
+async function buscarConfiguracoesPb(): Promise<RecordModel | null> {
+  for (const filter of filtrosConfiguracoes()) {
+    try {
+      const res = await pb.collection('configuracoes').getList(1, 1, { filter })
+      if (res.items.length > 0) return res.items[0]!
+    } catch {
+      // tenta próximo filtro legado
+    }
+  }
+  return null
+}
+
+/** Contas legadas (tenant vazio) passam a usar o tenant compartilhado da equipe. */
+export async function garantirTenantUsuario(): Promise<void> {
+  const record = pb.authStore.record as { id?: string; tenant?: string } | null
+  if (!record?.id) return
+  if (record.tenant?.trim()) return
+
+  await pb.collection('users').update(record.id, { tenant: TENANT_PRINCIPAL })
+  await pb.collection('users').authRefresh()
+}
+
+/** Configurações vazias para conta recém-criada (tenant = id do usuário). */
+export async function criarConfiguracoesIniciais(
+  tenant: string,
+  nomeRevenda?: string,
+): Promise<void> {
+  await pb.collection('configuracoes').create({
+    tenant,
+    slug: tenant,
+    nome_revenda: nomeRevenda?.trim() || 'Minha Revenda',
+    socios: ['Sócio principal', 'Sócio parceiro'],
+    meta_lucro_mensal: CONFIGURACOES_PADRAO.meta_lucro_mensal,
+    capital_inicial_pessoal: CONFIGURACOES_PADRAO.capital_inicial_pessoal,
+  })
 }
 
 
@@ -699,7 +733,7 @@ export async function importarParaPb(estado: EstadoImportavel): Promise<void> {
 
       fotosOmitidasTotal += fotosOmitidas
 
-      const body = preparePbImportCreateBody(veiculoToPb(veiculo))
+      const body = withTenant(preparePbImportCreateBody(veiculoToPb(veiculo)))
 
       const created = await pb.collection('veiculos').create(body)
 
@@ -727,11 +761,11 @@ export async function importarParaPb(estado: EstadoImportavel): Promise<void> {
 
       const veiculoId = resolveRelId(c.veiculo_id, `Compra ${c.id}`)
 
-      const body = preparePbImportCreateBody(
+      const body = withTenant(preparePbImportCreateBody(
 
         compraToPb({ ...c, veiculo_id: veiculoId, data: normalizarDataPb(c.data) }),
 
-      )
+      ))
 
       const created = await pb.collection('compras').create(body)
 
@@ -761,11 +795,11 @@ export async function importarParaPb(estado: EstadoImportavel): Promise<void> {
 
       const veiculoId = resolveRelId(v.veiculo_id, `Venda ${v.id}`)
 
-      const body = preparePbImportCreateBody(
+      const body = withTenant(preparePbImportCreateBody(
 
         vendaToPb({ ...v, veiculo_id: veiculoId, data: normalizarDataPb(v.data) }),
 
-      )
+      ))
 
       const created = await pb.collection('vendas').create(body)
 
@@ -799,11 +833,11 @@ export async function importarParaPb(estado: EstadoImportavel): Promise<void> {
 
         : undefined
 
-      const body = preparePbImportCreateBody(
+      const body = withTenant(preparePbImportCreateBody(
 
         despesaToPb(prepareDespesaParaImportPb({ ...d, veiculo_id: veiculoId })),
 
-      )
+      ))
 
       const created = await pb.collection('despesas').create(body)
 

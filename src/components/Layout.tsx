@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { BottomNav } from './BottomNav'
+import { AssinaturaAutor } from './AssinaturaAutor'
 import { ServerStatusBanner } from './ServerStatusBanner'
 import { MigrarLocalStorageBanner } from './MigrarLocalStorageBanner'
 import { useStore } from '@/store/useStore'
@@ -27,6 +28,10 @@ export function Layout() {
         <main className="flex-1 p-4 pb-24 sm:p-6 md:pb-6">
           <Outlet />
         </main>
+
+        <footer className="px-4 pb-20 text-center md:hidden">
+          <AssinaturaAutor />
+        </footer>
       </div>
 
       <BottomNav />

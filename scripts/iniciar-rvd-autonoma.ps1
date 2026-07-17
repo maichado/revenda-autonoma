@@ -188,6 +188,8 @@ Write-Host '=== Pronto ===' -ForegroundColor Green
 Write-Host '  App:        http://localhost:5173' -ForegroundColor White
 Write-Host '  PocketBase: http://127.0.0.1:8090' -ForegroundColor White
 Write-Host '  Login app:  admin@revenda.local / RevendaAutonoma2024!' -ForegroundColor Gray
+Write-Host '              adminmaicon / adminmaicon' -ForegroundColor Gray
+Write-Host '              cristiano@cristiano.com / cristiano' -ForegroundColor Gray
 Write-Host ''
 Write-Host 'Dados em:' -ForegroundColor Gray
 Write-Host "  $PbData" -ForegroundColor Gray

@@ -1,0 +1,17 @@
+# Copie para ngrok.yml e coloque seu authtoken (NÃO commitar ngrok.yml).
+# Conta gratuita: https://dashboard.ngrok.com/get-started/your-authtoken
+#
+#   copy ngrok.yml.example ngrok.yml
+#   # edite authtoken em ngrok.yml
+#
+# Uso (com PocketBase + npm run dev:ngrok já rodando na porta 5173):
+#   ngrok start --config ngrok.yml rvd-app
+
+version: "2"
+authtoken: COLOQUE_SEU_AUTHTOKEN_AQUI
+
+tunnels:
+  rvd-app:
+    addr: 5173
+    proto: http
+    inspect: true
