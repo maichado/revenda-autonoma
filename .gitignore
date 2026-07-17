@@ -19,6 +19,7 @@ tsconfig.node.tsbuildinfo
 scripts/secrets.ps1
 ngrok.yml
 ngrok-url.txt
+pocketbase-url.txt
 
 # PocketBase em runtime (binário + banco SQLite)
 # Pasta de dados PocketBase (irmã do repositório — fora do Git)
