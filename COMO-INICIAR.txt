@@ -1,0 +1,245 @@
+================================================================================
+  RVD AUTÔNOMA — COMO INICIAR O SISTEMA
+  Repositório: https://github.com/maichado/revenda-autonoma
+  Branch: rvd-autonoma
+================================================================================
+
+Este arquivo é um guia prático. Documentação completa: README.md
+
+
+--------------------------------------------------------------------------------
+  PRÉ-REQUISITOS (Windows)
+--------------------------------------------------------------------------------
+
+  [ ] Node.js 20+     https://nodejs.org
+  [ ] Git             https://git-scm.com
+  [ ] PowerShell      (já vem no Windows)
+
+  Opcional (só para dev remoto):
+  [ ] ngrok           https://ngrok.com/download
+
+
+--------------------------------------------------------------------------------
+  PRIMEIRA VEZ — CLONAR E CONFIGURAR
+--------------------------------------------------------------------------------
+
+  1. Abra o PowerShell e vá para a pasta onde quer o projeto:
+
+       cd C:\Users\SEU_USUARIO\Documentos
+
+  2. Clone o repositório:
+
+       git clone https://github.com/maichado/revenda-autonoma.git
+       cd revenda-autonoma
+       git checkout rvd-autonoma
+
+  3. Instale dependências:
+
+       npm install
+
+  4. Crie arquivos de configuração local (NÃO vão pro Git):
+
+       copy .env.example .env
+       copy .env.pb.local.example .env.pb.local
+
+     Edite .env.pb.local com SEU e-mail e senha de admin do PocketBase.
+
+  5. Rode o setup completo (baixa PocketBase, schema, usuários seed):
+
+       .\scripts\iniciar-rvd-autonoma.ps1
+
+     Na primeira execução o navegador abre o painel PocketBase.
+     Crie o superuser com o MESMO e-mail/senha do .env.pb.local
+
+  6. Se o frontend não abriu sozinho, em outro terminal:
+
+       npm run dev
+
+  7. Acesse o app:
+
+       http://localhost:5173
+
+
+--------------------------------------------------------------------------------
+  USO DIÁRIO — MODO LOCAL (só você / mesma rede)
+--------------------------------------------------------------------------------
+
+  OPÇÃO A — Dois terminais (recomendado)
+
+    Terminal 1 — Backend (PocketBase):
+      cd revenda-autonoma
+      .\scripts\start-pocketbase.ps1
+
+    Terminal 2 — Frontend (React):
+      cd revenda-autonoma
+      npm run dev
+
+  OPÇÃO B — Atalho único
+
+    Duplo clique em:  Iniciar-RVD-Autonoma.bat
+
+    OU no PowerShell:
+      npm run start:dev
+
+  URLs locais:
+    App ...................... http://localhost:5173
+    PocketBase API ........... http://127.0.0.1:8090
+    Admin PocketBase ......... http://127.0.0.1:8090/_/
+
+
+--------------------------------------------------------------------------------
+  DEV REMOTO — COMPARTILHAR COM ALGUÉM FORA (NGROK)
+--------------------------------------------------------------------------------
+
+  O colega remoto abre UM link HTTPS no navegador.
+  Seu PC precisa ficar ligado com PocketBase + túnel rodando.
+
+  --- Configuração única do ngrok ---
+
+    1. Baixe: https://ngrok.com/download
+    2. Crie conta e copie o authtoken:
+       https://dashboard.ngrok.com/get-started/your-authtoken
+    3. No PowerShell:
+
+         ngrok config add-authtoken SEU_TOKEN_AQUI
+
+    Opcional (arquivo de config):
+         copy ngrok.yml.example ngrok.yml
+         (edite authtoken dentro de ngrok.yml — não commitar)
+
+  --- Toda vez que for compartilhar ---
+
+    Terminal 1 — PocketBase (obrigatório):
+      cd revenda-autonoma
+      .\scripts\start-pocketbase.ps1
+
+    Terminal 2 — Túnel + frontend:
+      cd revenda-autonoma
+      npm run dev:ngrok
+
+    O terminal mostra algo como:
+      https://xxxx-xxxx.ngrok-free.app
+
+    A URL também fica salva em:  ngrok-url.txt  (local, não commitar)
+
+    Envie esse link para quem vai testar de longe.
+
+  --- O que o remoto faz ---
+
+    1. Abre o link no Chrome/Edge
+    2. Faz login (ou cria conta na aba "Criar conta")
+    3. Usa o sistema normalmente — dados vêm do SEU PocketBase local
+
+  --- Ferramentas do host ---
+
+    Inspector ngrok (ver tráfego):  http://127.0.0.1:4040
+    Health PocketBase:                http://127.0.0.1:8090/api/health
+
+  --- Encerrar ---
+
+    Ctrl+C no terminal do npm run dev:ngrok
+    Feche o terminal do PocketBase quando terminar
+
+  IMPORTANTE:
+    - Use npm run dev:ngrok (não exponha só a porta 8090)
+    - O Vite repassa /api e /_/ para o PocketBase — por isso um link basta
+    - Links ngrok mudam a cada sessão (plano gratuito)
+
+
+--------------------------------------------------------------------------------
+  ALTERNATIVA RÁPIDA — CLOUDFLARE TUNNEL (sem conta ngrok)
+--------------------------------------------------------------------------------
+
+  Link temporário (muda ao reiniciar). Com PocketBase já rodando:
+
+    Terminal 1:  .\scripts\start-pocketbase.ps1
+    Terminal 2:  npm run dev
+                 $env:VITE_PB_VIA_PROXY = "true"
+                 npx vite --host
+
+    Terminal 3:  npx cloudflared tunnel --url http://127.0.0.1:5173
+
+  Copie a URL https://....trycloudflare.com que aparecer.
+
+
+--------------------------------------------------------------------------------
+  LOGINS DE DESENVOLVIMENTO (após seed)
+--------------------------------------------------------------------------------
+
+  Contas da EQUIPE (dados compartilhados — tenant principal):
+
+    admin@revenda.local          /  RevendaAutonoma2024!
+    adminmaicon@revenda.local    /  adminmaicon
+    cristiano@cristiano.com      /  cristiano
+
+  Conta NOVA pelo app:
+    Login → aba "Criar conta" → dados isolados (não vê estoque da equipe)
+
+  Admin do servidor PocketBase (superuser):
+    Credenciais em .env.pb.local (só na sua máquina)
+    Painel: http://127.0.0.1:8090/_/
+
+
+--------------------------------------------------------------------------------
+  COMANDOS ÚTEIS
+--------------------------------------------------------------------------------
+
+  Atualizar schema (novos campos no banco):
+    .\scripts\atualizar-schema.ps1
+
+  Migrar dados legados para tenant da equipe:
+    . .\scripts\load-pb-secrets.ps1
+    node .\scripts\migrar-tenant.js
+
+  Reset total do banco (CUIDADO — apaga tudo):
+    .\scripts\iniciar-rvd-autonoma.ps1 -Reset
+
+  Build de produção local:
+    npm run build
+    npm run preview
+
+
+--------------------------------------------------------------------------------
+  PROBLEMAS RÁPIDOS
+--------------------------------------------------------------------------------
+
+  "Servidor desconectado" no app
+    → Rode .\scripts\start-pocketbase.ps1
+
+  Login não funciona
+    → PocketBase online? Usuário existe em Collections → users?
+
+  ngrok: "não encontrado"
+    → Instale ngrok e rode: ngrok config add-authtoken SEU_TOKEN
+
+  ngrok: "PocketBase offline"
+    → Terminal 1 precisa ter start-pocketbase.ps1 rodando ANTES do dev:ngrok
+
+  Porta 8090 ou 5173 ocupada
+    → Já tem instância rodando; feche o terminal antigo
+
+  Dados sumiram após atualizar
+    → Rode migrar-tenant.js; confira tenant do usuário no painel PB
+
+  Configurações não salvam
+    → PocketBase precisa estar online; faça logout/login
+
+
+--------------------------------------------------------------------------------
+  O QUE NUNCA COMMITAR NO GIT
+--------------------------------------------------------------------------------
+
+  .env
+  .env.pb.local
+  .env.ngrok.local
+  ngrok.yml
+  ngrok-url.txt
+  pocketbase-url.txt
+  pasta rvd-autonoma-pb/  (banco com dados reais)
+
+  Antes de commit:  git status
+
+
+================================================================================
+  Fim do guia — RVD Autônoma
+================================================================================
