@@ -6,6 +6,8 @@ import {
   type ReactNode,
 } from 'react'
 import { format } from 'date-fns'
+import { novoIdPb } from '@/lib/pbIds'
+import { veiculoPossuiOutraVenda } from '@/utils/calculos'
 import type {
   FormaRecebimentoVenda,
   Veiculo,
@@ -15,12 +17,13 @@ import { FORMAS_RECEBIMENTO_VENDA } from '@/types'
 import { Modal } from './Modal'
 import { Button } from './Button'
 import { formatarMoeda } from '@/utils/formatadores'
-import { novoIdPb } from '@/lib/pbIds'
 
 interface Props {
   open: boolean
   /** Quando undefined, é cadastro; quando definido, é edição. */
   venda?: Venda
+  /** Vendas já registradas — evita duplicata no mesmo veículo. */
+  vendas: Venda[]
   /** Lista de veículos cadastrados — alimenta o select obrigatório. */
   veiculos: Veiculo[]
   /**
@@ -135,6 +138,7 @@ function validarCPF(cpf: string): boolean {
 export function VendaFormModal({
   open,
   venda,
+  vendas,
   veiculos,
   veiculoIdInicial,
   onClose,
@@ -198,6 +202,11 @@ export function VendaFormModal({
       e.veiculo_id = 'Selecione o veículo.'
     } else if (!veiculos.some((v) => v.id === form.veiculo_id)) {
       e.veiculo_id = 'Veículo não encontrado no estoque.'
+    } else if (
+      veiculoPossuiOutraVenda(vendas, form.veiculo_id, venda?.id)
+    ) {
+      e.veiculo_id =
+        'Este veículo já possui venda registrada. Edite ou exclua a venda existente.'
     }
 
     if (!form.comprador_nome.trim()) {

@@ -83,16 +83,3 @@ export async function comPersistencia(
   }
 }
 
-
-
-/** Fire-and-forget legado — evitar em novos fluxos. */
-
-export function runPbSync(fn: () => Promise<void>): void {
-
-  if (!pbSyncAtivo) return
-
-  fn().catch((err) => handlePbSyncError(err, notifyPbOffline))
-
-}
-
-

@@ -9,7 +9,8 @@ Roda **no seu PC** com frontend React e backend **PocketBase** local (gratuito, 
 **Repositório:** [github.com/maichado/revenda-autonoma](https://github.com/maichado/revenda-autonoma)  
 **Branch de desenvolvimento:** `rvd-autonoma`
 
-> Guia rápido só de inicialização (local e ngrok): **[COMO-INICIAR.txt](COMO-INICIAR.txt)**
+> Guia rápido só de inicialização (local e ngrok): **[COMO-INICIAR.txt](COMO-INICIAR.txt)**  
+> Code review de sustentabilidade (prioridades e backlog): **[docs/CODE_REVIEW.md](docs/CODE_REVIEW.md)**
 
 ---
 
@@ -30,7 +31,9 @@ Roda **no seu PC** com frontend React e backend **PocketBase** local (gratuito, 
 13. [Scripts úteis](#scripts-úteis)
 14. [Problemas comuns](#problemas-comuns)
 15. [Estrutura do código](#estrutura-do-código)
-16. [Personalização](#personalização)
+16. [Padrões de código](#padrões-de-código)
+17. [Decisões de arquitetura](#decisões-de-arquitetura)
+18. [Personalização](#personalização)
 
 ---
 
@@ -105,31 +108,48 @@ Envie o link `https://....ngrok-free.app` que aparece no terminal (também salvo
 
 ```
 Seu computador
-├── revenda-autonoma/        ← clone do Git (produto: RVD Autônoma)
-│   ├── src/                 ← código React
+├── gm-revenda/ (ou revenda-autonoma/)   ← código do produto RVD Autônoma
+│   ├── src/                 ← React (pages, components, store, lib, utils)
 │   ├── pocketbase/
 │   │   └── pb_schema.json   ← estrutura das collections (versionada)
-│   └── scripts/             ← iniciar PB, schema, seed, ngrok
+│   ├── scripts/             ← iniciar PB, schema, seed, ngrok, validações
+│   ├── vite.config.ts       ← alias @, proxy /api → PocketBase
+│   └── .env                 ← VITE_POCKETBASE_URL (local)
 │
-└── rvd-autonoma-pb/         ← criada automaticamente (NÃO vai pro Git)
+└── gm-revenda-pb/ (ou rvd-autonoma-pb/) ← runtime PB (NÃO vai pro Git)
     ├── pocketbase.exe
     └── pb_data/             ← banco SQLite com seus dados reais
 ```
 
-**Fluxo local:** o navegador (`npm run dev` → porta **5173**) fala com o PocketBase (**8090**). Cada alteração (veículo, despesa, etc.) é salva no servidor **antes** de atualizar a tela.
+Os scripts preferem a pasta irmã `rvd-autonoma-pb`; se não existir, usam `gm-revenda-pb` (legado).
 
-**Fluxo ngrok:** o Vite expõe a porta 5173 na internet e **repassa** `/api` e `/_/` para o PocketBase local. O dev remoto usa **um único link** — não precisa instalar PocketBase.
+**Fluxo de dados (server-first):**
+
+```
+UI (pages/components) → Zustand useStore → comPersistencia → pbApi → PocketBase
+                              ↑ hidratação no login (AuthContext + fetchAllData)
+```
+
+**Fluxo local:** o navegador (`npm run dev` → porta **5173**) fala com o PocketBase (**8090**). Cada alteração é salva no servidor **antes** de atualizar a tela.
+
+**Fluxo ngrok:** o Vite expõe a porta 5173 e **repassa** `/api` e `/_/` para o PocketBase local.
 
 ---
 
 ## Contas e isolamento (multi-tenant)
 
-Cada registro de negócio tem um campo `tenant`. Regras do PocketBase garantem que um usuário só vê dados do próprio tenant.
+Cada registro de negócio tem um campo `tenant`. Regras do PocketBase (`tenant = @request.auth.tenant`) + filtro client-side em `fetchAllData` / importação.
 
 | Tipo de conta | Tenant | Dados |
 |---------------|--------|-------|
 | **Equipe principal** (seed: admin, adminmaicon, cristiano) | `rvd-autonoma-principal` | Compartilhados entre esses usuários |
 | **Conta nova** (Criar conta no login) | `id` do próprio usuário | Totalmente isolada — estoque vazio, config própria |
+
+**Regras de segurança em `users` (schema):**
+
+- Cadastro público **não pode** já enviar `tenant` preenchido (só vazio/omitido).
+- Depois que o `tenant` está definido, o usuário **não pode** alterá-lo via API (impede escalar para o tenant da equipe).
+- No primeiro update (tenant vazio → valor), o app define `tenant = user.id` no registro.
 
 Contas legadas criadas antes do multi-tenant podem ser migradas com:
 
@@ -137,6 +157,8 @@ Contas legadas criadas antes do multi-tenant podem ser migradas com:
 . .\scripts\load-pb-secrets.ps1
 node .\scripts\migrar-tenant.js
 ```
+
+> Após atualizar o schema (regras de `users`), rode `.\scripts\atualizar-schema.ps1` com o PocketBase ligado.
 
 ---
 
@@ -272,7 +294,7 @@ npm run build
 npm run preview
 ```
 
-Abre em http://localhost:4173 (PocketBase continua obrigatório no mesmo PC).
+Abre em http://localhost:5173 (preview deste projeto usa a mesma porta do Vite; PocketBase continua obrigatório no mesmo PC).
 
 ---
 
@@ -435,6 +457,9 @@ Faz backup de `pb_data` com timestamp antes de apagar.
 | `migrar-tenant.js` | Migra dados legados para tenant principal |
 | `seed-pocketbase.js` | Usuários + config inicial |
 | `npm run start:dev` | Atalho: PB + Vite dev |
+| `npm run lint` | Typecheck TypeScript (`tsc -b --noEmit`) |
+| `validar-cenario-*.mts` | Validação de cenários financeiros (domínio) |
+| `test-import-*.mjs` | Testes manuais do fluxo de importação |
 
 ---
 
@@ -458,16 +483,56 @@ Faz backup de `pb_data` com timestamp antes de apagar.
 ## Estrutura do código
 
 ```
-src/
-├── pages/           # Telas (Dashboard, Veículos, Banco Pessoal, …)
-├── components/      # UI reutilizável
-├── store/           # Zustand + ações sync PB
-├── lib/             # pocketbase.ts, pbApi, pbTenant, mappers
-├── contexts/        # Auth (login + registro)
-├── constants/       # TENANT_PRINCIPAL, etc.
-├── utils/           # Cálculos, relatórios, banco pessoal
-└── types/           # TypeScript
+gm-revenda/
+├── src/
+│   ├── pages/           # Telas de rota (Dashboard, Veículos, Banco Pessoal, …)
+│   ├── components/      # UI (prefixos por domínio: Veiculo*, Venda*, Relatorio*)
+│   ├── store/           # Zustand (negócio) + pbSyncBridge (server-first)
+│   ├── lib/             # Cliente PB, pbApi, mappers, tenant, FIPE, import
+│   ├── contexts/        # Auth (login + registro + hidratação)
+│   ├── hooks/           # useDebounce, useSalvarServidor, useTheme, useToast
+│   ├── constants/       # TENANT_PRINCIPAL, marca, storage, defaults
+│   ├── utils/           # Domínio puro: calculos, bancoPessoal, relatórios, backup
+│   └── types/           # Contratos TypeScript (snake_case alinhado ao PB)
+├── pocketbase/
+│   └── pb_schema.json   # Schema versionado das collections
+├── scripts/             # Setup, seed, migração, ngrok, validar-cenario-*.mts
+├── public/              # Favicon / assets estáticos
+└── vite.config.ts
 ```
+
+---
+
+## Padrões de código
+
+Para quem for contribuir depois:
+
+| Tema | Convenção |
+|------|-----------|
+| Componentes / páginas | PascalCase em português (`VeiculoFormModal`, `BancoPessoal`) |
+| Campos de entidade | snake_case (`valor_compra`, `veiculo_id`) — espelha PocketBase |
+| Rotas | kebab-case PT (`/banco-pessoal`) |
+| Import alias | `@/` → `src/` |
+| Sync PB | funções `sync{Entity}{Action}` em `lib/pbApi.ts` |
+| Mutações | sempre via `comPersistencia(syncFn, applyLocal)` — servidor primeiro |
+| Preferências UI | Zustand `persist` (tema, sidebar) no localStorage — **não** misturar com dados de negócio |
+| Cálculos | preferir `utils/` puro; páginas só orquestram UI |
+| Validação de tipos | `npm run lint` (= `tsc -b --noEmit`); não há ESLint/Prettier no projeto ainda |
+| Idioma da UI | português (Brasil) |
+
+**Não altere regras de negócio financeiro** (`bancoPessoal.ts`, `calculos.ts`) sem validar com os scripts `scripts/validar-cenario-*.mts` e sem alinhamento com o dono do produto.
+
+---
+
+## Decisões de arquitetura
+
+1. **PocketBase local (SQLite)** — backend zero-ops no PC do usuário; schema versionado em JSON e importado por script (sem `pb_hooks` / migrations Go).
+2. **Sync server-first** — evita divergência otimista; se o PB estiver offline, a mutação falha com feedback claro.
+3. **Multi-tenant por string `tenant`** — equipe compartilha `rvd-autonoma-principal`; auto-cadastro fica isolado no `user.id`.
+4. **Banco Pessoal derivado** — a UI calcula pool/caixa/a devolver a partir de veículos, despesas e vendas (`utils/bancoPessoal.ts`). As collections `bp_carros` / `bp_lancamentos` existem no schema histórico, mas **não são usadas pelo frontend atual**.
+5. **Fotos/logo em JSON (base64)** — simplicidade de backup/import; custo: payloads grandes (limite ~2MB no schema).
+6. **Sem realtime** — um tenant compartilhado por vários usuários/abas pode sobrescrever edições; refresh após login carrega o estado do servidor.
+7. **Workspace dual** — nesta máquina pode existir um app Flask legado na pasta pai (`ControleCompraVenda/app`). O produto ativo é **este** frontend + PocketBase.
 
 ---
 

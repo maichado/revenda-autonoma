@@ -102,6 +102,54 @@ export function calcularMargemEsperada(
   )
 }
 
+/** Lucro esperado (R$) antes da venda — venda pretendida − custo total. */
+export function calcularLucroEsperadoVeiculo(
+  veiculo: Veiculo,
+  despesas: Despesa[],
+): number {
+  return veiculo.valor_venda_pretendido - custoTotalVeiculo(veiculo, despesas)
+}
+
+export interface ResumoFinanceiroVeiculo {
+  rotuloVenda: 'Venda pretendida' | 'Venda feita'
+  valorVenda: number
+  lucroLiquido: number
+  margemPercentual: number
+  lucroMeu: number
+  lucroSocio: number
+  vendido: boolean
+}
+
+/** Venda pretendida ou feita + lucro líquido do carro (com sua parte se a meia). */
+export function resumoFinanceiroVeiculo(
+  veiculo: Veiculo,
+  despesas: Despesa[],
+  venda?: Venda,
+): ResumoFinanceiroVeiculo {
+  const vendido = veiculo.status === 'vendido' && !!venda
+  const lucroLiquido = vendido
+    ? calcularLucroVenda(venda, veiculo, despesas)
+    : calcularLucroEsperadoVeiculo(veiculo, despesas)
+  const valorVenda = vendido ? venda.valor_venda : veiculo.valor_venda_pretendido
+  const margemPercentual =
+    veiculo.valor_compra > 0
+      ? (lucroLiquido / veiculo.valor_compra) * 100
+      : 0
+  const fracao = fracaoSocio(veiculo)
+  const lucroSocio = lucroLiquido * fracao
+  const lucroMeu = lucroLiquido - lucroSocio
+
+  return {
+    rotuloVenda: vendido ? 'Venda feita' : 'Venda pretendida',
+    valorVenda,
+    lucroLiquido,
+    margemPercentual,
+    lucroMeu,
+    lucroSocio,
+    vendido,
+  }
+}
+
 /**
  * Fração do lucro que pertence ao SÓCIO (parceiro) neste veículo.
  *   - "solo" (100% seu): 0
@@ -109,6 +157,58 @@ export function calcularMargemEsperada(
  */
 export function fracaoSocio(veiculo: Veiculo | undefined): number {
   return veiculo?.tipo_propriedade === 'meia' ? 0.5 : 0
+}
+
+/** Origem do lucro para separar revenda compartilhada vs pessoal (pool MG). */
+export type OrigemLucroVenda = 'compartilhada' | 'revenda_solo' | 'pessoal'
+
+/**
+ * Classifica de onde vem o lucro de um veículo vendido:
+ * - compartilhada: carro a meia (50/50 com sócio)
+ * - pessoal: solo financiado com pool MG ou bolso pessoal
+ * - revenda_solo: solo 100% caixa da revenda (sem pool/pessoal)
+ *
+ * Passe `funding` da simulação quando o cadastro não tiver funding manual.
+ */
+export type FundingOrigemLucro = {
+  do_revenda?: number
+  do_capital_inicial?: number
+  do_reinvestimento?: number
+  do_bolso?: number
+}
+
+export function classificarOrigemLucroVeiculo(
+  veiculo: Veiculo | undefined,
+  funding?: FundingOrigemLucro | null,
+): OrigemLucroVenda {
+  if (!veiculo) return 'revenda_solo'
+  if (veiculo.tipo_propriedade === 'meia') return 'compartilhada'
+
+  if (funding) {
+    const doPool =
+      (Number(funding.do_capital_inicial) || 0) +
+      (Number(funding.do_reinvestimento) || 0) +
+      (Number(funding.do_bolso) || 0)
+    if (doPool > 0) return 'pessoal'
+    return 'revenda_solo'
+  }
+
+  const investimento = Number(veiculo.compra_funding_investimento) || 0
+  const pessoal = Number(veiculo.compra_funding_pessoal) || 0
+  if (investimento > 0 || pessoal > 0) return 'pessoal'
+
+  return 'revenda_solo'
+}
+
+/** Veículo já tem outra venda registrada (evita duplicata no lucro do mês). */
+export function veiculoPossuiOutraVenda(
+  vendas: Venda[],
+  veiculoId: string,
+  vendaIdExcluir?: string,
+): boolean {
+  return vendas.some(
+    (v) => v.veiculo_id === veiculoId && v.id !== vendaIdExcluir,
+  )
 }
 
 /** Parte do lucro DA VENDA que cabe ao sócio (0 em carros "solo"). */
@@ -262,49 +362,170 @@ export function lucroRealizadoMes(
 }
 
 export interface LucroBreakdown {
-  /** Lucro realizado do negócio no mês (número "MG"). */
+  /** Lucro revenda + pessoal − despesas gerais (compatibilidade). */
   total: number
-  /** Lucro bruto dos carros vendidos, antes das despesas gerais. */
+  /** Soma bruta de todos os carros vendidos no mês. */
   realizadoVeiculos: number
   /** Despesas gerais do mês (sem veículo). */
   despesasGerais: number
-  /** Parte que cabe ao(s) sócio(s) — metade dos carros "a meia" vendidos. */
+  /** Lucro bruto — carros a meia (Gol, Palio…). */
+  lucroCompartilhado: number
+  /** Lucro bruto — solo caixa da revenda. */
+  lucroRevendaSolo: number
+  /** Lucro bruto — solo pool MG / bolso pessoal (Golf, Gurgel…). */
+  lucroPessoal: number
+  /** Revenda líquida = compartilhado + revenda solo − despesas gerais. */
+  revendaLiquido: number
+  /** Lucro pessoal 100% seu (não divide com sócio). */
+  pessoalLiquido: number
+  /** Parte do(s) sócio(s) — metade dos carros a meia. */
   socio: number
-  /** Sua parte (Maicon) = total − parte do(s) sócio(s). */
+  /** Sua parte na revenda (revenda líquida − sócio). */
+  meuRevenda: number
+  /** Total seu = revenda + pessoal. */
   meu: number
-  /** Há pelo menos um carro "a meia" vendido no mês (habilita a exibição). */
+  /** Há carro a meia vendido no mês. */
   temDivisao: boolean
+  /** Há lucro pessoal no mês. */
+  temPessoal: boolean
 }
 
 /**
- * Lucro do mês separado em "MG" (total realizado), "seu" (Maicon) e
- * "do(s) sócio(s)". A parte do sócio é metade do lucro de cada carro "a meia"
- * vendido; despesas gerais reduzem apenas a sua parte (não a do sócio).
+ * Lucro do mês separado em revenda (compartilhada + caixa) e pessoal (pool MG).
+ * Despesas gerais reduzem só a revenda; lucro pessoal é 100% seu.
  */
 export function lucroDoMesBreakdown(
   vendas: Venda[],
   veiculos: Veiculo[],
   despesas: Despesa[],
   ref: Date,
+  fundingPorVeiculo?: Map<string, FundingOrigemLucro>,
 ): LucroBreakdown {
   const vendasMes = vendas.filter((v) => dentroDoMes(v.data, ref))
   let realizadoVeiculos = 0
+  let lucroCompartilhado = 0
+  let lucroRevendaSolo = 0
+  let lucroPessoal = 0
   let socio = 0
+
   for (const v of vendasMes) {
     const veic = veiculos.find((x) => x.id === v.veiculo_id)
-    realizadoVeiculos += calcularLucroVenda(v, veic, despesas)
-    socio += parteSocioVenda(v, veic, despesas)
+    const lucro = calcularLucroVenda(v, veic, despesas)
+    realizadoVeiculos += lucro
+
+    const funding = veic ? fundingPorVeiculo?.get(veic.id) : undefined
+    const origem = classificarOrigemLucroVeiculo(veic, funding)
+    if (origem === 'compartilhada') {
+      lucroCompartilhado += lucro
+      socio += lucro * 0.5
+    } else if (origem === 'pessoal') {
+      lucroPessoal += lucro
+    } else {
+      lucroRevendaSolo += lucro
+    }
   }
+
   const despesasGerais = despesasGeraisDoMes(despesas, ref)
-  const total = realizadoVeiculos - despesasGerais
+  const revendaBruta = lucroCompartilhado + lucroRevendaSolo
+  const revendaLiquido = revendaBruta - despesasGerais
+  const pessoalLiquido = lucroPessoal
+  const meuRevenda = revendaLiquido - socio
+  const meu = meuRevenda + pessoalLiquido
+  const total = revendaLiquido + pessoalLiquido
+
   return {
     total,
     realizadoVeiculos,
     despesasGerais,
+    lucroCompartilhado,
+    lucroRevendaSolo,
+    lucroPessoal,
+    revendaLiquido,
+    pessoalLiquido,
     socio,
-    meu: total - socio,
+    meuRevenda,
+    meu,
     temDivisao: socio !== 0,
+    temPessoal: pessoalLiquido !== 0,
   }
+}
+
+/** Despesas gerais (sem veículo) dentro do ano de referência. */
+export function despesasGeraisDoAno(despesas: Despesa[], ref: Date): number {
+  return despesas
+    .filter((d) => !d.veiculo_id && dentroDoAno(d.data, ref))
+    .reduce((acc, d) => acc + d.valor, 0)
+}
+
+/**
+ * Lucro do ano (acumulado até a data de referência) separado em revenda
+ * (compartilhada + caixa) e pessoal (pool MG) — mesma lógica de
+ * `lucroDoMesBreakdown`, só que somando todas as vendas do ano corrente.
+ */
+export function lucroDoAnoBreakdown(
+  vendas: Venda[],
+  veiculos: Veiculo[],
+  despesas: Despesa[],
+  ref: Date,
+  fundingPorVeiculo?: Map<string, FundingOrigemLucro>,
+): LucroBreakdown {
+  const vendasAno = vendas.filter((v) => dentroDoAno(v.data, ref))
+  let realizadoVeiculos = 0
+  let lucroCompartilhado = 0
+  let lucroRevendaSolo = 0
+  let lucroPessoal = 0
+  let socio = 0
+
+  for (const v of vendasAno) {
+    const veic = veiculos.find((x) => x.id === v.veiculo_id)
+    const lucro = calcularLucroVenda(v, veic, despesas)
+    realizadoVeiculos += lucro
+
+    const funding = veic ? fundingPorVeiculo?.get(veic.id) : undefined
+    const origem = classificarOrigemLucroVeiculo(veic, funding)
+    if (origem === 'compartilhada') {
+      lucroCompartilhado += lucro
+      socio += lucro * 0.5
+    } else if (origem === 'pessoal') {
+      lucroPessoal += lucro
+    } else {
+      lucroRevendaSolo += lucro
+    }
+  }
+
+  const despesasGerais = despesasGeraisDoAno(despesas, ref)
+  const revendaBruta = lucroCompartilhado + lucroRevendaSolo
+  const revendaLiquido = revendaBruta - despesasGerais
+  const pessoalLiquido = lucroPessoal
+  const meuRevenda = revendaLiquido - socio
+  const meu = meuRevenda + pessoalLiquido
+  const total = revendaLiquido + pessoalLiquido
+
+  return {
+    total,
+    realizadoVeiculos,
+    despesasGerais,
+    lucroCompartilhado,
+    lucroRevendaSolo,
+    lucroPessoal,
+    revendaLiquido,
+    pessoalLiquido,
+    socio,
+    meuRevenda,
+    meu,
+    temDivisao: socio !== 0,
+    temPessoal: pessoalLiquido !== 0,
+  }
+}
+
+/** Lucro líquido da revenda no mês (meta e comparativos). */
+export function lucroRevendaMes(
+  vendas: Venda[],
+  veiculos: Veiculo[],
+  despesas: Despesa[],
+  ref: Date,
+): number {
+  return lucroDoMesBreakdown(vendas, veiculos, despesas, ref).revendaLiquido
 }
 
 export function vendidosNoMes(vendas: Venda[], ref: Date): number {
@@ -404,7 +625,8 @@ export function serieUltimosMeses(
   for (let i = n - 1; i >= 0; i--) {
     const ponto = subMonths(ref, i)
     const receita = receitaDoMes(vendas, ponto)
-    const lucroRealizado = lucroRealizadoMes(vendas, veiculos, despesas, ponto)
+    const breakdown = lucroDoMesBreakdown(vendas, veiculos, despesas, ponto)
+    const lucroRealizado = breakdown.revendaLiquido + breakdown.pessoalLiquido
     // Custos "realizados" = tudo que não virou lucro (custo dos vendidos +
     // suas despesas + despesas gerais), mantendo receita − custos = lucro.
     const custos = receita - lucroRealizado
@@ -435,7 +657,8 @@ export function lucroAcumuladoAno(
   for (let m = 0; m < 12; m++) {
     const ponto = new Date(ano, m, 15)
     if (ponto > ref && m > ref.getMonth()) break
-    const lucroMes = lucroRealizadoMes(vendas, veiculos, despesas, ponto)
+    const breakdown = lucroDoMesBreakdown(vendas, veiculos, despesas, ponto)
+    const lucroMes = breakdown.revendaLiquido + breakdown.pessoalLiquido
     acc += lucroMes
     out.push({
       mes: ponto

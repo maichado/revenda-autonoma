@@ -6,8 +6,8 @@
     "system": false,
     "listRule": "id = @request.auth.id",
     "viewRule": "id = @request.auth.id",
-    "createRule": "",
-    "updateRule": "id = @request.auth.id",
+    "createRule": "@request.body.tenant:isset = false || @request.body.tenant = ''",
+    "updateRule": "id = @request.auth.id && (@request.body.tenant:isset = false || @request.body.tenant = tenant || tenant = '')",
     "deleteRule": "id = @request.auth.id",
     "fields": [
       {

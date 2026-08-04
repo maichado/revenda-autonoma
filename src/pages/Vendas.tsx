@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Download, Plus, Search, Tags } from 'lucide-react'
 
 import { useStore } from '@/store/useStore'
+import { useDebounce } from '@/hooks/useDebounce'
 import { useToast } from '@/hooks/useToast'
 import { useSalvarServidor } from '@/hooks/useSalvarServidor'
 import { formatPbError } from '@/lib/pbApi'
@@ -24,16 +25,6 @@ const filtrosVazios: FiltrosVendas = {
   dataInicio: '',
   dataFim: '',
   formasRecebimento: [],
-}
-
-// Hook simples de debounce — usado pela busca por placa/comprador/modelo.
-function useDebounce<T>(valor: T, delayMs = 250): T {
-  const [val, setVal] = useState(valor)
-  useEffect(() => {
-    const t = window.setTimeout(() => setVal(valor), delayMs)
-    return () => window.clearTimeout(t)
-  }, [valor, delayMs])
-  return val
 }
 
 export default function Vendas() {
@@ -302,6 +293,7 @@ export default function Vendas() {
       <VendaFormModal
         open={formAberto}
         venda={editando}
+        vendas={vendas}
         veiculos={veiculos}
         onClose={fecharForm}
         onSubmit={salvarVenda}

@@ -64,7 +64,12 @@ import {
 
 } from '@/lib/pbImportPrep'
 
-import { filtrosConfiguracoes, tenantAtual, withTenant } from '@/lib/pbTenant'
+import {
+  filtroTenant,
+  filtrosConfiguracoes,
+  tenantAtual,
+  withTenant,
+} from '@/lib/pbTenant'
 import { TENANT_PRINCIPAL } from '@/constants/tenant'
 
 
@@ -336,10 +341,13 @@ export async function fetchAllData(): Promise<
     let simulacoesRes: RecordModel[] = []
     let simulacoesColecaoOk = true
 
+    // Defesa em profundidade: além das API rules, filtra pelo tenant da sessão.
+    const filtro = filtroTenant()
+
     try {
       simulacoesRes = await pb
         .collection('simulacoes')
-        .getFullList({ sort: '-data' })
+        .getFullList({ sort: '-data', filter: filtro })
     } catch (err) {
       if (isCollectionMissingError(err)) {
         simulacoesColecaoOk = false
@@ -351,10 +359,22 @@ export async function fetchAllData(): Promise<
     const [veiculosRes, comprasRes, vendasRes, despesasRes, configRes] =
       await withTimeout(
         Promise.all([
-          pb.collection('veiculos').getFullList({ sort: '-data_compra' }),
-          pb.collection('compras').getFullList({ sort: '-data' }),
-          pb.collection('vendas').getFullList({ sort: '-data' }),
-          pb.collection('despesas').getFullList({ sort: '-data' }),
+          pb.collection('veiculos').getFullList({
+            sort: '-data_compra',
+            filter: filtro,
+          }),
+          pb.collection('compras').getFullList({
+            sort: '-data',
+            filter: filtro,
+          }),
+          pb.collection('vendas').getFullList({
+            sort: '-data',
+            filter: filtro,
+          }),
+          pb.collection('despesas').getFullList({
+            sort: '-data',
+            filter: filtro,
+          }),
           buscarConfiguracoesPb(),
         ]),
         FETCH_TIMEOUT_MS,
@@ -586,7 +606,10 @@ export async function syncSimulacaoDelete(id: string): Promise<void> {
 
 export async function limparSimulacoesPb(): Promise<void> {
   try {
-    const items = await pb.collection('simulacoes').getFullList({ fields: 'id' })
+    const items = await pb.collection('simulacoes').getFullList({
+      fields: 'id',
+      filter: filtroTenant(),
+    })
     for (const item of items) {
       await pb.collection('simulacoes').delete(item.id)
     }
@@ -695,12 +718,17 @@ export async function importarParaPb(estado: EstadoImportavel): Promise<void> {
 
 
   const ordemDelete = ['simulacoes', 'despesas', 'compras', 'vendas', 'veiculos'] as const
+  // Nunca apaga fora do tenant da sessão (defense-in-depth + API rules).
+  const filtro = filtroTenant()
 
   for (const col of ordemDelete) {
 
     try {
 
-      const items = await pb.collection(col).getFullList({ fields: 'id' })
+      const items = await pb.collection(col).getFullList({
+        fields: 'id',
+        filter: filtro,
+      })
 
       for (const item of items) {
 

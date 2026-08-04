@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Car,
+  CheckCircle2,
+  ChevronDown,
   CircleDollarSign,
   Coins,
   Gauge,
@@ -15,13 +17,16 @@ import {
 } from 'lucide-react'
 
 import { useStore } from '@/store/useStore'
+import { useDebounce } from '@/hooks/useDebounce'
 import { useToast } from '@/hooks/useToast'
 import { useSalvarServidor } from '@/hooks/useSalvarServidor'
 import { formatPbError } from '@/lib/pbApi'
 import {
   calcularMargemEsperada,
   custoTotalVeiculo,
+  resumoFinanceiroVeiculo,
   totalEmEstoque,
+  type ResumoFinanceiroVeiculo,
 } from '@/utils/calculos'
 import {
   formatarMoeda,
@@ -52,16 +57,6 @@ const filtrosVazios: FiltrosVeiculos = {
 }
 
 type Visao = 'cards' | 'tabela'
-
-// Hook simples de debounce — usado pela busca por placa/modelo.
-function useDebounce<T>(valor: T, delayMs = 250): T {
-  const [val, setVal] = useState(valor)
-  useEffect(() => {
-    const t = window.setTimeout(() => setVal(valor), delayMs)
-    return () => window.clearTimeout(t)
-  }, [valor, delayMs])
-  return val
-}
 
 export default function Veiculos() {
   const veiculos = useStore((s) => s.veiculos)
@@ -118,15 +113,7 @@ export default function Veiculos() {
     return () => document.removeEventListener('mousedown', handler)
   }, [menuDadosAberto])
 
-  // Margens calculadas por id — usado por cards/tabela. --------------------
-  const margensPorId = useMemo(() => {
-    const out: Record<string, number> = {}
-    for (const v of veiculos) {
-      out[v.id] = calcularMargemEsperada(v, despesas)
-    }
-    return out
-  }, [veiculos, despesas])
-
+  // Resumo financeiro por veículo — venda pretendida/feita + lucro líquido.
   const vendasPorVeiculoId = useMemo(() => {
     const map: Record<string, Venda | undefined> = {}
     for (const venda of vendas) {
@@ -136,6 +123,14 @@ export default function Veiculos() {
     }
     return map
   }, [vendas])
+
+  const resumosPorId = useMemo(() => {
+    const out: Record<string, ResumoFinanceiroVeiculo> = {}
+    for (const v of veiculos) {
+      out[v.id] = resumoFinanceiroVeiculo(v, despesas, vendasPorVeiculoId[v.id])
+    }
+    return out
+  }, [veiculos, despesas, vendasPorVeiculoId])
 
   // Lista de marcas distintas — alimenta o select do componente de filtros.
   const marcasDisponiveis = useMemo(() => {
@@ -289,6 +284,30 @@ export default function Veiculos() {
   // Renderização -----------------------------------------------------------
   const totalGeral = veiculos.length
   const totalFiltrado = veiculosFiltrados.length
+
+  // Separação visual: disponíveis (estoque ativo) vs. vendidos. Mesma tela,
+  // duas seções bem demarcadas — em vez de misturar tudo numa lista só.
+  const disponiveisFiltrados = useMemo(
+    () => veiculosFiltrados.filter((v) => v.status !== 'vendido'),
+    [veiculosFiltrados],
+  )
+  const vendidosFiltrados = useMemo(
+    () => veiculosFiltrados.filter((v) => v.status === 'vendido'),
+    [veiculosFiltrados],
+  )
+  const valorPrevistoDisponiveis = useMemo(
+    () =>
+      disponiveisFiltrados.reduce((acc, v) => acc + v.valor_venda_pretendido, 0),
+    [disponiveisFiltrados],
+  )
+  const receitaVendidos = useMemo(
+    () =>
+      vendidosFiltrados.reduce(
+        (acc, v) => acc + (vendasPorVeiculoId[v.id]?.valor_venda ?? 0),
+        0,
+      ),
+    [vendidosFiltrados, vendasPorVeiculoId],
+  )
 
   return (
     <div className="space-y-6">
@@ -468,7 +487,7 @@ export default function Veiculos() {
             {totalGeral === 1 ? 'veículo' : 'veículos'}.
           </p>
 
-          {/* Conteúdo: cards ou tabela */}
+          {/* Conteúdo: duas seções sempre visíveis — Disponíveis e Vendidos */}
           {totalFiltrado === 0 ? (
             <div className="card p-10 text-center">
               <p className="text-sm font-medium">Nenhum veículo encontrado.</p>
@@ -476,28 +495,45 @@ export default function Veiculos() {
                 Ajuste a busca ou limpe os filtros para ver mais resultados.
               </p>
             </div>
-          ) : visao === 'cards' ? (
-            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {veiculosFiltrados.map((v) => (
-                <VeiculoCard
-                  key={v.id}
-                  veiculo={v}
-                  margemEsperada={margensPorId[v.id] ?? 0}
-                  venda={vendasPorVeiculoId[v.id]}
-                  onEditar={() => abrirEdicao(v)}
-                  onExcluir={() => setVeiculoExcluir(v)}
-                  onRegistrarVenda={() => abrirRegistroVenda(v)}
-                />
-              ))}
-            </section>
           ) : (
-            <VeiculoTable
-              veiculos={veiculosFiltrados}
-              margensPorId={margensPorId}
-              onEditar={abrirEdicao}
-              onExcluir={(v) => setVeiculoExcluir(v)}
-              onRegistrarVenda={(v) => abrirRegistroVenda(v)}
-            />
+            <div className="space-y-8">
+              <SecaoVeiculos
+                titulo="Disponíveis no estoque"
+                descricao="Em preparação, disponíveis e reservados"
+                icone={<Package size={16} />}
+                corIcone="bg-primary/15 text-primary"
+                contagem={disponiveisFiltrados.length}
+                resumoLabel="previsto de venda"
+                resumoValor={formatarMoeda(valorPrevistoDisponiveis)}
+                veiculos={disponiveisFiltrados}
+                visao={visao}
+                resumosPorId={resumosPorId}
+                vendasPorVeiculoId={vendasPorVeiculoId}
+                onEditar={abrirEdicao}
+                onExcluir={setVeiculoExcluir}
+                onRegistrarVenda={abrirRegistroVenda}
+                mensagemVazia="Nenhum veículo disponível com os filtros atuais."
+              />
+
+              <SecaoVeiculos
+                titulo="Vendidos"
+                descricao="Histórico de negócios já concluídos"
+                icone={<CheckCircle2 size={16} />}
+                corIcone="bg-sky-500/15 text-sky-500"
+                contagem={vendidosFiltrados.length}
+                resumoLabel="receita total"
+                resumoValor={formatarMoeda(receitaVendidos)}
+                veiculos={vendidosFiltrados}
+                visao={visao}
+                resumosPorId={resumosPorId}
+                vendasPorVeiculoId={vendasPorVeiculoId}
+                onEditar={abrirEdicao}
+                onExcluir={setVeiculoExcluir}
+                onRegistrarVenda={abrirRegistroVenda}
+                mensagemVazia="Nenhum veículo vendido com os filtros atuais."
+                colapsavel
+              />
+            </div>
           )}
         </>
       )}
@@ -545,6 +581,7 @@ export default function Veiculos() {
           pré-preenchendo o veículo selecionado. */}
       <VendaFormModal
         open={!!vendaVeiculoId}
+        vendas={vendas}
         veiculos={veiculos}
         veiculoIdInicial={vendaVeiculoId}
         onClose={() => setVendaVeiculoId(undefined)}
@@ -602,6 +639,131 @@ export default function Veiculos() {
         </p>
       </Modal>
     </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// Seção de veículos (Disponíveis ou Vendidos) — cabeçalho com contagem e
+// resumo financeiro, seguido de cards ou tabela conforme a visão escolhida.
+// -----------------------------------------------------------------------------
+function SecaoVeiculos({
+  titulo,
+  descricao,
+  icone,
+  corIcone,
+  contagem,
+  resumoLabel,
+  resumoValor,
+  veiculos,
+  visao,
+  resumosPorId,
+  vendasPorVeiculoId,
+  onEditar,
+  onExcluir,
+  onRegistrarVenda,
+  mensagemVazia,
+  colapsavel = false,
+}: {
+  titulo: string
+  descricao: string
+  icone: ReactNode
+  corIcone: string
+  contagem: number
+  resumoLabel: string
+  resumoValor: string
+  veiculos: Veiculo[]
+  visao: Visao
+  resumosPorId: Record<string, ResumoFinanceiroVeiculo>
+  vendasPorVeiculoId: Record<string, Venda | undefined>
+  onEditar: (v: Veiculo) => void
+  onExcluir: (v: Veiculo) => void
+  onRegistrarVenda: (v: Veiculo) => void
+  mensagemVazia: string
+  colapsavel?: boolean
+}) {
+  const [aberto, setAberto] = useState(true)
+  const mostrarConteudo = !colapsavel || aberto
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-light pb-3 dark:border-border-dark">
+        <button
+          type="button"
+          onClick={() => colapsavel && setAberto((v) => !v)}
+          className={[
+            'flex items-center gap-3 text-left',
+            colapsavel ? 'cursor-pointer' : 'cursor-default',
+          ].join(' ')}
+          aria-expanded={colapsavel ? aberto : undefined}
+        >
+          <span
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${corIcone}`}
+          >
+            {icone}
+          </span>
+          <span>
+            <span className="flex items-center gap-2">
+              <h2 className="text-base font-semibold">{titulo}</h2>
+              <span className="badge bg-zinc-500/15 text-zinc-600 dark:text-zinc-300">
+                {contagem}
+              </span>
+            </span>
+            <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+              {descricao}
+            </span>
+          </span>
+          {colapsavel && (
+            <ChevronDown
+              size={16}
+              className={[
+                'ml-1 shrink-0 text-zinc-400 transition-transform',
+                aberto ? 'rotate-180' : '',
+              ].join(' ')}
+            />
+          )}
+        </button>
+
+        {contagem > 0 && (
+          <div className="text-right">
+            <p className="text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              {resumoLabel}
+            </p>
+            <p className="tabular text-sm font-semibold">{resumoValor}</p>
+          </div>
+        )}
+      </div>
+
+      {mostrarConteudo &&
+        (contagem === 0 ? (
+          <div className="card p-6 text-center">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              {mensagemVazia}
+            </p>
+          </div>
+        ) : visao === 'cards' ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {veiculos.map((v) => (
+              <VeiculoCard
+                key={v.id}
+                veiculo={v}
+                resumo={resumosPorId[v.id]}
+                venda={vendasPorVeiculoId[v.id]}
+                onEditar={() => onEditar(v)}
+                onExcluir={() => onExcluir(v)}
+                onRegistrarVenda={() => onRegistrarVenda(v)}
+              />
+            ))}
+          </div>
+        ) : (
+          <VeiculoTable
+            veiculos={veiculos}
+            resumosPorId={resumosPorId}
+            onEditar={onEditar}
+            onExcluir={onExcluir}
+            onRegistrarVenda={onRegistrarVenda}
+          />
+        ))}
+    </section>
   )
 }
 

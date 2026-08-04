@@ -9,7 +9,7 @@ interface Props {
   onClose: () => void
   children?: ReactNode
   footer?: ReactNode
-  size?: 'sm' | 'md' | 'lg' | 'xl'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
 }
 
 const sizeClasses = {
@@ -17,6 +17,7 @@ const sizeClasses = {
   md: 'max-w-md',
   lg: 'max-w-2xl',
   xl: 'max-w-4xl',
+  '2xl': 'max-w-6xl',
 }
 
 // Modal genérico — focado em uso sem navegação de página.

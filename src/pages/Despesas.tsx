@@ -13,7 +13,7 @@
 //   • Tudo persiste no store Zustand → Dashboard reflete em tempo real
 //     via `lucroDoMes`, `despesasDoMes`, `ultimasMovimentacoes`, etc.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 
 import { useStore } from '@/store/useStore'
+import { useDebounce } from '@/hooks/useDebounce'
 import { useToast } from '@/hooks/useToast'
 import { useSalvarServidor } from '@/hooks/useSalvarServidor'
 import { formatPbError } from '@/lib/pbApi'
@@ -53,16 +54,6 @@ import {
   filtrosDespesasVazios,
   type FiltrosDespesas,
 } from '@/components/DespesaFiltros'
-
-// Debounce simples para a busca por descrição (250ms — spec).
-function useDebounce<T>(valor: T, delayMs = 250): T {
-  const [val, setVal] = useState(valor)
-  useEffect(() => {
-    const t = window.setTimeout(() => setVal(valor), delayMs)
-    return () => window.clearTimeout(t)
-  }, [valor, delayMs])
-  return val
-}
 
 export default function Despesas() {
   const despesas = useStore((s) => s.despesas)

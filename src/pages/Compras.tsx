@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Plus, Search, ShoppingBag } from 'lucide-react'
 
 import { useStore } from '@/store/useStore'
+import { useDebounce } from '@/hooks/useDebounce'
 import { useToast } from '@/hooks/useToast'
 import { useSalvarServidor } from '@/hooks/useSalvarServidor'
 import { formatPbError } from '@/lib/pbApi'
@@ -27,16 +28,6 @@ const filtrosVazios: FiltrosCompras = {
   dataFim: '',
   formasPagamento: [],
   origens: [],
-}
-
-// Hook simples de debounce — usado pela busca por placa/vendedor.
-function useDebounce<T>(valor: T, delayMs = 250): T {
-  const [val, setVal] = useState(valor)
-  useEffect(() => {
-    const t = window.setTimeout(() => setVal(valor), delayMs)
-    return () => window.clearTimeout(t)
-  }, [valor, delayMs])
-  return val
 }
 
 export default function Compras() {

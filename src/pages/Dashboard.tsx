@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -18,9 +18,12 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Car,
+  CheckCircle2,
+  ChevronDown,
   CircleDollarSign,
   Coins,
   Gauge,
+  Package,
   PiggyBank,
   ShoppingBag,
   Tags,
@@ -37,7 +40,7 @@ import {
   distribuicaoEstoque,
   lucroAcumuladoAno,
   lucroDoMesBreakdown,
-  lucroRealizadoMes,
+  lucroRevendaMes,
   receitaDoMes,
   refMesAnterior,
   roiMedioDoMes,
@@ -48,6 +51,7 @@ import {
   variacaoPercentual,
   vendidosNoMes,
 } from '@/utils/calculos'
+import { simularPoolPessoal } from '@/utils/bancoPessoal'
 import {
   linhasTempoVeiculos,
 } from '@/utils/tempoVeiculo'
@@ -99,6 +103,9 @@ export default function Dashboard() {
   const metaLucro = useStore((s) => s.configuracoes.meta_lucro_mensal)
   const nomeRevenda = useStore((s) => s.configuracoes.nome_revenda)
   const socios = useStore((s) => s.configuracoes.socios)
+  const capitalInicial = useStore(
+    (s) => s.configuracoes.capital_inicial_pessoal,
+  )
 
   // Nome curto do dono (primeiro sócio da lista) para rotular a "sua parte".
   const nomeDono = useMemo(
@@ -126,10 +133,21 @@ export default function Dashboard() {
     const receitaAnt = receitaDoMes(vendas, anterior)
     const varReceita = variacaoPercentual(receitaAtual, receitaAnt)
 
-    const breakdown = lucroDoMesBreakdown(vendas, veiculos, despesas, hoje)
-    const lucroAtual = breakdown.total
-    const lucroAnt = lucroRealizadoMes(vendas, veiculos, despesas, anterior)
-    const varLucro = variacaoPercentual(lucroAtual, lucroAnt)
+    const sim = simularPoolPessoal(veiculos, vendas, capitalInicial, {
+      despesas,
+      nomeRevenda,
+      socios,
+    })
+    const breakdown = lucroDoMesBreakdown(
+      vendas,
+      veiculos,
+      despesas,
+      hoje,
+      sim.fundingPorVeiculo,
+    )
+    const lucroRevendaAtual = breakdown.revendaLiquido
+    const lucroRevendaAnt = lucroRevendaMes(vendas, veiculos, despesas, anterior)
+    const varLucro = variacaoPercentual(lucroRevendaAtual, lucroRevendaAnt)
 
     const ticketAtual = ticketMedioDoMes(vendas, hoje)
     const ticketAnt = ticketMedioDoMes(vendas, anterior)
@@ -146,17 +164,20 @@ export default function Dashboard() {
       varVendidos,
       receitaAtual,
       varReceita,
-      lucroAtual,
+      lucroRevendaAtual,
       varLucro,
-      lucroMeu: breakdown.meu,
+      lucroPessoal: breakdown.pessoalLiquido,
+      lucroMeuRevenda: breakdown.meuRevenda,
+      lucroMeuTotal: breakdown.meu,
       lucroSocio: breakdown.socio,
       temDivisao: breakdown.temDivisao,
+      temPessoal: breakdown.temPessoal,
       ticketAtual,
       varTicket,
       roiAtual,
       varRoi,
     }
-  }, [veiculos, vendas, despesas, hoje, anterior])
+  }, [veiculos, vendas, despesas, hoje, anterior, capitalInicial, nomeRevenda, socios])
 
   // ----- Séries para gráficos -----
   const serie6m = useMemo(
@@ -174,11 +195,17 @@ export default function Dashboard() {
     () => linhasTempoVeiculos(veiculos, vendas, hoje),
     [veiculos, vendas, hoje],
   )
-  const qtdAtivos = useMemo(
-    () => linhasTempo.filter((l) => l.veiculo.status !== 'vendido').length,
+  const linhasAtivas = useMemo(
+    () => linhasTempo.filter((l) => l.veiculo.status !== 'vendido'),
     [linhasTempo],
   )
-  const qtdVendidos = linhasTempo.length - qtdAtivos
+  const linhasVendidas = useMemo(
+    () => linhasTempo.filter((l) => l.veiculo.status === 'vendido'),
+    [linhasTempo],
+  )
+  const qtdAtivos = linhasAtivas.length
+  const qtdVendidos = linhasVendidas.length
+  const [vendidosAbertos, setVendidosAbertos] = useState(true)
 
   // ----- Movimentações recentes -----
   const ultimas = useMemo(
@@ -188,7 +215,7 @@ export default function Dashboard() {
 
   // ----- Progresso da meta -----
   const percMeta = metaLucro > 0
-    ? Math.max(0, Math.min(200, (kpis.lucroAtual / metaLucro) * 100))
+    ? Math.max(0, Math.min(200, (kpis.lucroRevendaAtual / metaLucro) * 100))
     : 0
   const metaAtingida = percMeta >= 100
 
@@ -226,31 +253,37 @@ export default function Dashboard() {
           variacaoPercentual={kpis.varReceita}
         />
         <KpiCard
-          titulo="Lucro do mês (MG)"
-          valor={formatarMoeda(kpis.lucroAtual)}
+          titulo="Lucro revenda (líq.)"
+          valor={formatarMoeda(kpis.lucroRevendaAtual)}
           icone={<PiggyBank size={16} />}
           variacaoPercentual={kpis.varLucro}
           detalhe={
-            kpis.temDivisao ? (
+            kpis.temDivisao || kpis.temPessoal ? (
               <div className="flex flex-wrap gap-1.5 text-[11px]">
                 <span
                   className="inline-flex items-center gap-1 rounded-md bg-emerald-500/12 px-1.5 py-0.5 font-semibold text-emerald-600 dark:text-emerald-400"
-                  title={`Parte de ${nomeDono}: 100% dos carros próprios + metade dos carros a meia − despesas gerais`}
+                  title={
+                    kpis.temPessoal
+                      ? `${nomeDono}: revenda ${formatarMoeda(kpis.lucroMeuRevenda)} + pessoal (Golf, Gurgel…) ${formatarMoeda(kpis.lucroPessoal)}`
+                      : `Parte de ${nomeDono} na revenda`
+                  }
                 >
                   <span className="text-emerald-500/70">{nomeDono}</span>
                   <span className="tabular">
-                    {formatarMoeda(kpis.lucroMeu)}
+                    {formatarMoeda(kpis.lucroMeuTotal)}
                   </span>
                 </span>
-                <span
-                  className="inline-flex items-center gap-1 rounded-md bg-amber-500/12 px-1.5 py-0.5 font-semibold text-amber-600 dark:text-amber-400"
-                  title="Parte do sócio (metade do lucro dos carros a meia vendidos)"
-                >
-                  <span className="text-amber-500/70">Sócio</span>
-                  <span className="tabular">
-                    {formatarMoeda(kpis.lucroSocio)}
+                {kpis.temDivisao && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-md bg-amber-500/12 px-1.5 py-0.5 font-semibold text-amber-600 dark:text-amber-400"
+                    title="Metade do lucro dos carros a meia (Gol, Palio…)"
+                  >
+                    <span className="text-amber-500/70">Sócio</span>
+                    <span className="tabular">
+                      {formatarMoeda(kpis.lucroSocio)}
+                    </span>
                   </span>
-                </span>
+                )}
               </div>
             ) : undefined
           }
@@ -279,18 +312,36 @@ export default function Dashboard() {
             <div>
               <p className="text-sm font-semibold">Meta de lucro do mês</p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {formatarMoeda(kpis.lucroAtual)} de {formatarMoeda(metaLucro)}
+                {formatarMoeda(kpis.lucroRevendaAtual)} de {formatarMoeda(metaLucro)}
+                {kpis.temPessoal && (
+                  <>
+                    {' '}
+                    · {nomeDono} (total):{' '}
+                    <span className="tabular font-semibold text-emerald-600 dark:text-emerald-400">
+                      {formatarMoeda(kpis.lucroMeuTotal)}
+                    </span>
+                  </>
+                )}
               </p>
               {kpis.temDivisao && (
                 <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-                  {nomeDono}:{' '}
+                  Revenda — {nomeDono}:{' '}
                   <span className="tabular font-semibold text-emerald-600 dark:text-emerald-400">
-                    {formatarMoeda(kpis.lucroMeu)}
+                    {formatarMoeda(kpis.lucroMeuRevenda)}
                   </span>{' '}
                   · Sócio:{' '}
                   <span className="tabular font-semibold text-amber-600 dark:text-amber-400">
                     {formatarMoeda(kpis.lucroSocio)}
                   </span>
+                  {kpis.temPessoal && (
+                    <>
+                      {' '}
+                      · Pessoal em {nomeDono}:{' '}
+                      <span className="tabular font-semibold text-emerald-600 dark:text-emerald-400">
+                        {formatarMoeda(kpis.lucroPessoal)}
+                      </span>
+                    </>
+                  )}
                 </p>
               )}
             </div>
@@ -324,41 +375,89 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Veículos — tempo no estoque */}
+      {/* Veículos — separado em duas seções claras: em estoque e vendidos */}
       {linhasTempo.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold">Veículos</h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Tempo total · preparação · dias anunciado (estoque e vendidos)
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {qtdAtivos > 0 && (
-                <span className="badge bg-primary/15 text-primary">
-                  {qtdAtivos} em estoque
+        <div className="space-y-6">
+          {/* Em estoque */}
+          {linhasAtivas.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center gap-3 border-b border-border-light pb-3 dark:border-border-dark">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+                  <Package size={16} />
                 </span>
-              )}
-              {qtdVendidos > 0 && (
-                <span className="badge bg-zinc-500/15 text-zinc-600 dark:text-zinc-300">
-                  {qtdVendidos} vendido{qtdVendidos === 1 ? '' : 's'}
+                <div>
+                  <span className="flex items-center gap-2">
+                    <h2 className="text-base font-semibold">Em estoque</h2>
+                    <span className="badge bg-primary/15 text-primary">
+                      {qtdAtivos}
+                    </span>
+                  </span>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Preparação · disponível · reservado
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {linhasAtivas.map(({ veiculo, metricas, venda }) => (
+                  <EstoqueTempoCard
+                    key={veiculo.id}
+                    veiculo={veiculo}
+                    metricas={metricas}
+                    venda={venda}
+                    compact
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Vendidos — colapsável para não competir visualmente com o estoque ativo */}
+          {linhasVendidas.length > 0 && (
+            <section className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setVendidosAbertos((v) => !v)}
+                className="flex w-full items-center gap-3 border-b border-border-light pb-3 text-left dark:border-border-dark"
+                aria-expanded={vendidosAbertos}
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-sky-500/15 text-sky-500">
+                  <CheckCircle2 size={16} />
                 </span>
+                <div className="flex-1">
+                  <span className="flex items-center gap-2">
+                    <h2 className="text-base font-semibold">Vendidos</h2>
+                    <span className="badge bg-sky-500/15 text-sky-500">
+                      {qtdVendidos}
+                    </span>
+                  </span>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Histórico de negócios concluídos
+                  </p>
+                </div>
+                <ChevronDown
+                  size={16}
+                  className={[
+                    'shrink-0 text-zinc-400 transition-transform',
+                    vendidosAbertos ? 'rotate-180' : '',
+                  ].join(' ')}
+                />
+              </button>
+              {vendidosAbertos && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {linhasVendidas.map(({ veiculo, metricas, venda }) => (
+                    <EstoqueTempoCard
+                      key={veiculo.id}
+                      veiculo={veiculo}
+                      metricas={metricas}
+                      venda={venda}
+                      compact
+                    />
+                  ))}
+                </div>
               )}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {linhasTempo.map(({ veiculo, metricas, venda }) => (
-              <EstoqueTempoCard
-                key={veiculo.id}
-                veiculo={veiculo}
-                metricas={metricas}
-                venda={venda}
-                compact
-              />
-            ))}
-          </div>
-        </section>
+            </section>
+          )}
+        </div>
       )}
 
       {/* Gráficos */}

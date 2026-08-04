@@ -276,11 +276,28 @@ export interface CarroBancoPessoal {
   do_reinvestimento: number
 }
 
+export type TipoMovimentacaoRevenda = 'venda' | 'compra' | 'despesa' | 'aporte'
+
+/** Linha do extrato do caixa revenda (giro vendeu → recompra a meia). */
+export interface MovimentacaoCaixaRevenda {
+  id: string
+  data: string
+  tipo: TipoMovimentacaoRevenda
+  veiculo_id?: string
+  carro_nome?: string
+  /** Positivo = entra; negativo = sai. */
+  valor: number
+  saldo_apos: number
+  detalhe: string
+}
+
 export type TipoMovimentacaoPool =
   | 'capital_inicial'
   | 'compra'
   | 'venda'
+  | 'devolucao'
   | 'saldo'
+  | 'aporte_revenda'
 
 /** Linha do extrato do pool pessoal (capital + reinvestimentos). */
 export interface MovimentacaoPool {

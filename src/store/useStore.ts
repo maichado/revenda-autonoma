@@ -1,18 +1,15 @@
 // Store global — dados de negócio no PocketBase; preferências de UI no localStorage.
 //
-// O módulo de Veículos é a "fonte da verdade" do sistema enquanto os demais
-// módulos (Compras/Vendas/Despesas) ainda são placeholders. Por isso o store
-// mantém INTEGRIDADE REFERENCIAL automaticamente:
+// Veículos, Compras, Vendas e Despesas são módulos ativos. O store mantém
+// INTEGRIDADE REFERENCIAL automaticamente:
 //
-//   - Ao cadastrar um veículo: cria-se um registro de Compra atrelado, para
-//     que o Dashboard contabilize a aquisição sem depender do módulo Compras.
-//     Se o veículo entra já com status="vendido", também cria-se uma Venda
-//     placeholder (a ser detalhada quando o módulo Vendas existir).
-//   - Ao registrar venda rápida (Veículos): cria a Venda + muda o status.
-//   - Ao excluir veículo: cascata em Compras/Vendas/Despesas vinculadas.
+//   - Ao cadastrar um veículo: cria-se um registro de Compra atrelado.
+//     Se o veículo entra já com status="vendido", também cria-se uma Venda.
+//   - Ao registrar venda (Veículos ou Vendas): cria a Venda + muda o status.
+//   - Ao excluir veículo: cascata em Compras/Vendas; despesas viram "gerais".
 //
-// Assim, qualquer ação em Veículos reflete imediatamente no Dashboard.
-// Cada mutação sincroniza com PocketBase quando o usuário está autenticado.
+// Cada mutação sincroniza com PocketBase quando o usuário está autenticado
+// (via comPersistencia — servidor primeiro, depois estado local).
 
 import { PREFS_STORAGE_KEY } from '@/constants/storage'
 import { create } from 'zustand'
@@ -41,6 +38,7 @@ import {
 } from '@/utils/seed'
 import { comPersistencia } from '@/store/pbSyncBridge'
 import { remapPagoPorCaixaRevenda } from '@/utils/despesaOrigem'
+import { veiculoPossuiOutraVenda } from '@/utils/calculos'
 import { novoIdPb } from '@/lib/pbIds'
 import {
   importarParaPb,
@@ -581,6 +579,11 @@ export const useStore = create<EstadoApp>()(
 
       // ------- Vendas -------
       addVenda: async (venda) => {
+        if (veiculoPossuiOutraVenda(get().vendas, venda.veiculo_id)) {
+          throw new Error(
+            'Este veículo já possui venda registrada. Edite ou exclua a venda existente.',
+          )
+        }
         await comPersistencia(
           async () => {
             await syncVendaCreate(venda)
@@ -703,19 +706,45 @@ export const useStore = create<EstadoApp>()(
         const atual = s0.despesas.find((d) => d.id === id)
         if (!atual) return
         const atualizada: Despesa = { ...atual, ...patch }
+        const veiculoMudou =
+          patch.veiculo_id !== undefined &&
+          atual.veiculo_id !== atualizada.veiculo_id
+
+        // Calcula vínculos a partir do snapshot pré-mutação — o sync roda
+        // antes do applyLocal, então get() ainda tem o estado antigo.
+        const vinculosPb: { id: string; despesas_vinculadas: string[] }[] = []
+        if (veiculoMudou) {
+          if (atual.veiculo_id) {
+            const antigo = s0.veiculos.find((v) => v.id === atual.veiculo_id)
+            if (antigo) {
+              vinculosPb.push({
+                id: antigo.id,
+                despesas_vinculadas: antigo.despesas_vinculadas.filter(
+                  (dId) => dId !== id,
+                ),
+              })
+            }
+          }
+          if (atualizada.veiculo_id) {
+            const novo = s0.veiculos.find((v) => v.id === atualizada.veiculo_id)
+            if (novo) {
+              vinculosPb.push({
+                id: novo.id,
+                despesas_vinculadas: novo.despesas_vinculadas.includes(id)
+                  ? novo.despesas_vinculadas
+                  : [...novo.despesas_vinculadas, id],
+              })
+            }
+          }
+        }
 
         await comPersistencia(
           async () => {
             await syncDespesaUpdate(id, patch)
-            if (patch.veiculo_id !== undefined) {
-              const veiculo = get().veiculos.find(
-                (v) => v.id === patch.veiculo_id,
-              )
-              if (veiculo) {
-                await syncVeiculoUpdate(veiculo.id, {
-                  despesas_vinculadas: veiculo.despesas_vinculadas,
-                })
-              }
+            for (const v of vinculosPb) {
+              await syncVeiculoUpdate(v.id, {
+                despesas_vinculadas: v.despesas_vinculadas,
+              })
             }
           },
           () =>
@@ -724,7 +753,7 @@ export const useStore = create<EstadoApp>()(
                 d.id === id ? atualizada : d,
               )
               let veiculos = s.veiculos
-              if (atual.veiculo_id !== atualizada.veiculo_id) {
+              if (veiculoMudou) {
                 veiculos = s.veiculos.map((v) => {
                   if (v.id === atual.veiculo_id) {
                     return {

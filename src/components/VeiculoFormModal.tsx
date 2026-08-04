@@ -7,16 +7,22 @@ import {
   type ReactNode,
 } from 'react'
 import { format } from 'date-fns'
-import { Loader2, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Loader2, Search, Wallet } from 'lucide-react'
 import type { StatusVeiculo, TipoPropriedade, Veiculo } from '@/types'
 import { TIPOS_PROPRIEDADE } from '@/types'
 import { Modal } from './Modal'
 import { Button } from './Button'
 import { FotoUploader } from './FotoUploader'
 import { formatarMoeda } from '@/utils/formatadores'
-import { sugerirFundingCompraFormulario } from '@/utils/bancoPessoal'
+import {
+  devolucoesPoolFromLancamentos,
+  lancamentosFromSistema,
+  nomeDonoCompleto,
+  saldosCaixasDisponiveis,
+  sugerirFundingCompraFormulario,
+} from '@/utils/bancoPessoal'
 import { socioParceiro, sociosAtivos } from '@/utils/socios'
-import { rotuloCaixaRevenda } from '@/utils/despesaOrigem'
 import { novoIdPb } from '@/lib/pbIds'
 import { useStore } from '@/store/useStore'
 import { buscarFipeAuto } from '@/lib/fipe'
@@ -171,6 +177,23 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
   )
   const nomeRevenda = useStore((s) => s.configuracoes.nome_revenda)
 
+  const opcoesCaixaFunding = useMemo(() => {
+    const dono = nomeDonoCompleto(socios)
+    const opcoesParciais = { despesas, nomeRevenda, socios }
+    const lancamentos = lancamentosFromSistema(
+      despesas,
+      veiculos,
+      dono,
+      capitalInicial,
+      vendas,
+      opcoesParciais,
+    )
+    return {
+      ...opcoesParciais,
+      devolucoes: devolucoesPoolFromLancamentos(lancamentos, vendas),
+    }
+  }, [despesas, veiculos, socios, capitalInicial, vendas, nomeRevenda])
+
   // --- Consulta FIPE automática --------------------------------------------
   const [fipeStatus, setFipeStatus] = useState<
     'idle' | 'loading' | 'ok' | 'erro'
@@ -235,7 +258,7 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
       veiculos,
       vendas,
       capitalInicial,
-      { despesas, nomeRevenda, socios },
+      opcoesCaixaFunding,
     )
     fundingEditado.current = false
     setForm((f) => ({
@@ -243,14 +266,28 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
       funding_revenda: String(sug.revenda),
       funding_investimento: String(sug.investimento),
       funding_pessoal: String(sug.pessoal),
-      funding_investimento_meia_socio:
-        f.tipo_propriedade === 'meia' && sug.investimento > 0,
-      funding_revenda_meia_socio:
-        f.tipo_propriedade === 'meia' && sug.revenda > 0,
-      funding_pessoal_meia_socio:
-        f.tipo_propriedade === 'meia' && sug.pessoal > 0,
+      funding_investimento_meia_socio: sug.investimentoMeiaSocio,
+      funding_revenda_meia_socio: sug.revendaMeiaSocio,
+      funding_pessoal_meia_socio: sug.pessoalMeiaSocio,
     }))
   }
+
+  const caixasDisponiveis = useMemo(() => {
+    const id = veiculo?.id ?? 'preview-novo'
+    return saldosCaixasDisponiveis(
+      veiculos,
+      vendas,
+      capitalInicial,
+      opcoesCaixaFunding,
+      id,
+    )
+  }, [
+    veiculo?.id,
+    veiculos,
+    vendas,
+    capitalInicial,
+    opcoesCaixaFunding,
+  ])
 
   useEffect(() => {
     if (!open || fundingEditado.current) return
@@ -265,9 +302,7 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
     veiculos,
     vendas,
     capitalInicial,
-    despesas,
-    nomeRevenda,
-    socios,
+    opcoesCaixaFunding,
   ])
 
   const editando = !!veiculo
@@ -833,14 +868,39 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
         {Number.isFinite(fundingResumo.valorCompra) &&
           fundingResumo.valorCompra > 0 && (
             <div className="rounded-lg border border-primary/25 bg-primary/5 px-4 py-3">
+              <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-border-light bg-white/60 px-3 py-2 text-xs dark:border-border-dark dark:bg-zinc-900/40">
+                <Wallet size={14} className="shrink-0 text-primary" />
+                <span className="text-zinc-600 dark:text-zinc-400">
+                  Disponível agora (
+                  <Link to="/banco-pessoal" className="text-primary hover:underline">
+                    Banco Pessoal
+                  </Link>
+                  ):
+                </span>
+                <span>
+                  Caixa revenda{' '}
+                  <strong className="tabular text-violet-700 dark:text-violet-300">
+                    {formatarMoeda(caixasDisponiveis.caixaRevenda)}
+                  </strong>
+                </span>
+                <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                <span>
+                  Caixa investimento{' '}
+                  <strong className="tabular text-primary">
+                    {formatarMoeda(caixasDisponiveis.caixaInvestimento)}
+                  </strong>
+                </span>
+              </div>
+
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                    Origem da compra
+                    Origem da compra — integrado ao Banco Pessoal
                   </p>
                   <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-                    De onde saiu cada parte — ex.: revenda R$ 12 mil + R$ 1,5
-                    mil investimento + R$ 1,5 mil pessoal = R$ 15 mil.
+                    {form.tipo_propriedade === 'meia'
+                      ? 'A meia com aporte novo (ex.: Uno R$ 10 mil): informe só sua metade no investimento (R$ 5 mil), sem marcar “metade do sócio” e com revenda zerada — o sistema trata +R$ 5 mil seu e +R$ 5 mil do sócio como aporte e compra pela revenda, sem comer o caixa que já existia.'
+                      : 'Solo: caixa investimento primeiro; revenda ou bolso se faltar.'}
                   </p>
                 </div>
                 <Button
@@ -855,11 +915,11 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
 
               <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <FundingOrigemColuna
-                  label={rotuloCaixaRevenda(nomeRevenda)}
+                  label="Caixa revenda"
                   hint={
                     fundingResumo.revenda > 0 && form.funding_revenda_meia_socio
-                      ? `Total na compra — sua parte: ${formatarMoeda(fundingResumo.revendaMeu)}`
-                      : 'Valor total usado do caixa da loja'
+                      ? `Total ${formatarMoeda(fundingResumo.revenda)} — sua metade: ${formatarMoeda(fundingResumo.revendaMeu)}`
+                      : 'Caixa compartilhado com o sócio (giro a meia)'
                   }
                   error={errors.funding_revenda}
                   valor={form.funding_revenda}
@@ -874,12 +934,15 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
                   detalheSocio="Metade atribuída ao parceiro no caixa da loja"
                 />
                 <FundingOrigemColuna
-                  label="Investimento"
+                  label="Caixa investimento"
                   hint={
                     fundingResumo.investimento > 0 &&
                     form.funding_investimento_meia_socio
-                      ? `Total na compra — seu pool: ${formatarMoeda(fundingResumo.investimentoMeu)}`
-                      : 'Pool (capital + reinvestimento) usado na compra'
+                      ? `Total ${formatarMoeda(fundingResumo.investimento)} — seu pool: ${formatarMoeda(fundingResumo.investimentoMeu)}`
+                      : form.tipo_propriedade === 'meia' &&
+                          fundingResumo.investimento > 0
+                        ? `Aporte ${formatarMoeda(fundingResumo.investimento)} — sai do investimento e entra na revenda`
+                        : 'Só seu — capital + vendas Golf'
                   }
                   valor={form.funding_investimento}
                   onValorChange={(v) =>
@@ -895,11 +958,11 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
                   detalheSocio="Só a sua metade sai do pool pessoal"
                 />
                 <FundingOrigemColuna
-                  label="Pessoal"
+                  label="Bolso (a devolver)"
                   hint={
                     fundingResumo.pessoal > 0 && form.funding_pessoal_meia_socio
-                      ? `Total na compra — a devolver seu: ${formatarMoeda(fundingResumo.pessoalMeu)}`
-                      : 'Do seu bolso (a devolver)'
+                      ? `Total ${formatarMoeda(fundingResumo.pessoal)} — seu: ${formatarMoeda(fundingResumo.pessoalMeu)}`
+                      : 'Passou do caixa — entra no Banco Pessoal'
                   }
                   valor={form.funding_pessoal}
                   onValorChange={(v) => marcarFundingEditado('funding_pessoal', v)}
@@ -913,6 +976,39 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
                   detalheSocio="Só a sua metade entra em A devolver"
                 />
               </div>
+
+              {(fundingResumo.revenda > 0 ||
+                fundingResumo.investimento > 0 ||
+                fundingResumo.pessoal > 0) && (
+                <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Após salvar: revenda{' '}
+                  <span className="tabular font-medium text-violet-600 dark:text-violet-400">
+                    {formatarMoeda(
+                      Math.max(0, caixasDisponiveis.caixaRevenda - fundingResumo.revenda),
+                    )}
+                  </span>
+                  {' · '}
+                  investimento{' '}
+                  <span className="tabular font-medium text-primary">
+                    {formatarMoeda(
+                      Math.max(
+                        0,
+                        caixasDisponiveis.caixaInvestimento -
+                          fundingResumo.investimentoMeu,
+                      ),
+                    )}
+                  </span>
+                  {fundingResumo.pessoalMeu > 0 && (
+                    <>
+                      {' · '}
+                      a devolver{' '}
+                      <span className="tabular font-medium text-amber-600">
+                        +{formatarMoeda(fundingResumo.pessoalMeu)}
+                      </span>
+                    </>
+                  )}
+                </p>
+              )}
 
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                 <span className="text-zinc-500">

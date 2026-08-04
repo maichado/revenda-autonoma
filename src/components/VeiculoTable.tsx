@@ -1,27 +1,39 @@
 import { Pencil, Tag, Trash2 } from 'lucide-react'
 import type { Veiculo } from '@/types'
+import type { ResumoFinanceiroVeiculo } from '@/utils/calculos'
 import { StatusBadge } from './Badge'
 import { formatarMoeda, formatarNumero, formatarPercentual } from '@/utils/formatadores'
 
 interface Props {
   veiculos: Veiculo[]
-  margensPorId: Record<string, number>
+  resumosPorId: Record<string, ResumoFinanceiroVeiculo>
   onEditar: (v: Veiculo) => void
   onExcluir: (v: Veiculo) => void
   onRegistrarVenda: (v: Veiculo) => void
 }
 
-// Visualização em tabela: zebra + hover + ações por linha.
+function classesLucro(valor: number): string {
+  if (valor < 0) return 'text-red-600 dark:text-red-400'
+  if (valor > 0) return 'text-emerald-600 dark:text-emerald-400'
+  return 'text-zinc-600 dark:text-zinc-400'
+}
+
+function classesMargem(margem: number): string {
+  if (margem < 0) return 'text-red-600 dark:text-red-400'
+  if (margem < 10) return 'text-amber-600 dark:text-amber-400'
+  return 'text-emerald-600 dark:text-emerald-400'
+}
+
 export function VeiculoTable({
   veiculos,
-  margensPorId,
+  resumosPorId,
   onEditar,
   onExcluir,
   onRegistrarVenda,
 }: Props) {
   return (
     <div className="card overflow-x-auto">
-      <table className="w-full min-w-[960px] text-sm">
+      <table className="w-full min-w-[1080px] text-sm">
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             <th className="px-3 py-3 font-medium">Placa</th>
@@ -30,7 +42,8 @@ export function VeiculoTable({
             <th className="px-3 py-3 text-right font-medium">KM</th>
             <th className="px-3 py-3 font-medium">Cor</th>
             <th className="px-3 py-3 text-right font-medium">Compra</th>
-            <th className="px-3 py-3 text-right font-medium">Venda prev.</th>
+            <th className="px-3 py-3 text-right font-medium">Venda</th>
+            <th className="px-3 py-3 text-right font-medium">Lucro líq.</th>
             <th className="px-3 py-3 text-right font-medium">Margem</th>
             <th className="px-3 py-3 font-medium">Status</th>
             <th className="px-3 py-3 text-right font-medium">Ações</th>
@@ -38,11 +51,9 @@ export function VeiculoTable({
         </thead>
         <tbody className="table-row-zebra table-row-hover">
           {veiculos.map((v) => {
-            const margem = margensPorId[v.id] ?? 0
-            let corMargem = 'text-emerald-600 dark:text-emerald-400'
-            if (margem < 0) corMargem = 'text-red-600 dark:text-red-400'
-            else if (margem < 10)
-              corMargem = 'text-amber-600 dark:text-amber-400'
+            const resumo = resumosPorId[v.id]
+            const margem = resumo?.margemPercentual ?? 0
+            const lucro = resumo?.lucroLiquido ?? 0
             const podeVender = v.status === 'disponível'
             return (
               <tr
@@ -82,13 +93,35 @@ export function VeiculoTable({
                 <td className="tabular px-3 py-3 text-right">
                   {formatarMoeda(v.valor_compra)}
                 </td>
-                <td className="tabular px-3 py-3 text-right font-semibold">
-                  {formatarMoeda(v.valor_venda_pretendido)}
+                <td className="px-3 py-3 text-right">
+                  <p className="text-[10px] uppercase tracking-wide text-zinc-400">
+                    {resumo?.rotuloVenda === 'Venda feita'
+                      ? 'Feita'
+                      : 'Pretendida'}
+                  </p>
+                  <p className="tabular font-semibold">
+                    {formatarMoeda(resumo?.valorVenda ?? v.valor_venda_pretendido)}
+                  </p>
                 </td>
                 <td
-                  className={['tabular px-3 py-3 text-right font-semibold', corMargem].join(
-                    ' ',
+                  className={[
+                    'tabular px-3 py-3 text-right font-semibold',
+                    classesLucro(lucro),
+                  ].join(' ')}
+                >
+                  {lucro >= 0 ? '+' : ''}
+                  {formatarMoeda(lucro)}
+                  {v.tipo_propriedade === 'meia' && resumo && (
+                    <p className="text-[10px] font-normal text-zinc-400">
+                      seu {formatarMoeda(resumo.lucroMeu)}
+                    </p>
                   )}
+                </td>
+                <td
+                  className={[
+                    'tabular px-3 py-3 text-right font-semibold',
+                    classesMargem(margem),
+                  ].join(' ')}
                 >
                   {formatarPercentual(margem, 1)}
                 </td>

@@ -1,30 +1,68 @@
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ArrowDownRight, ArrowUpRight, TrendingUp } from 'lucide-react'
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  CalendarRange,
+  TrendingUp,
+} from 'lucide-react'
 import { LogoRevenda } from '@/components/LogoRevenda'
 import { abreviarNomeRevenda, NOME_REVENDA_PADRAO } from '@/constants/marca'
 import { useStore } from '@/store/useStore'
-import { lucroDoMesBreakdown } from '@/utils/calculos'
+import {
+  lucroDoAnoBreakdown,
+  lucroDoMesBreakdown,
+  type LucroBreakdown,
+} from '@/utils/calculos'
+import { simularPoolPessoal } from '@/utils/bancoPessoal'
 import { formatarMoeda } from '@/utils/formatadores'
 import { ThemeToggle } from './ThemeToggle'
 
-// Header global — nome da loja, data e LUCRO DO MÊS sempre visível.
+// Header global — lucro revenda líquido + divisão sócio / pessoal.
 export function Header() {
-  const nome = useStore((s) => s.configuracoes.nome_revenda)
+  const nomeRevenda = useStore((s) => s.configuracoes.nome_revenda)
   const socios = useStore((s) => s.configuracoes.socios)
   const vendas = useStore((s) => s.vendas)
   const veiculos = useStore((s) => s.veiculos)
   const despesas = useStore((s) => s.despesas)
+  const capitalInicial = useStore(
+    (s) => s.configuracoes.capital_inicial_pessoal,
+  )
 
   const hoje = useMemo(() => new Date(), [])
-  const breakdown = useMemo(
-    () => lucroDoMesBreakdown(vendas, veiculos, despesas, hoje),
-    [vendas, veiculos, despesas, hoje],
+  const { breakdownMes, breakdownAno } = useMemo(
+    () => {
+      const sim = simularPoolPessoal(veiculos, vendas, capitalInicial, {
+        despesas,
+        nomeRevenda,
+        socios,
+      })
+      return {
+        breakdownMes: lucroDoMesBreakdown(
+          vendas,
+          veiculos,
+          despesas,
+          hoje,
+          sim.fundingPorVeiculo,
+        ),
+        breakdownAno: lucroDoAnoBreakdown(
+          vendas,
+          veiculos,
+          despesas,
+          hoje,
+          sim.fundingPorVeiculo,
+        ),
+      }
+    },
+    [vendas, veiculos, despesas, hoje, capitalInicial, nomeRevenda, socios],
   )
-  const lucro = breakdown.total
-  const positivo = lucro >= 0
-  const marcaCurta = abreviarNomeRevenda(nome)
+  const breakdown = breakdownMes
+  const lucroRevenda = breakdown.revendaLiquido
+  const lucroRevendaAno = breakdownAno.revendaLiquido
+  const positivoRevenda = lucroRevenda >= 0
+  const positivoRevendaAno = lucroRevendaAno >= 0
+  const marcaCurta = abreviarNomeRevenda(nomeRevenda)
   const nomeDono = socios[0]?.trim().split(/\s+/)[0] || 'Você'
 
   const dataLonga = format(hoje, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })
@@ -38,17 +76,16 @@ export function Header() {
         'dark:bg-surface-dark/80 dark:border-border-dark',
       ].join(' ')}
     >
-      {/* Identidade (em mobile mostra a logo; em desktop o sidebar já mostra) */}
       <div className="flex items-center justify-center md:hidden">
         <LogoRevenda
           height={33}
-          nomeRevenda={nome || NOME_REVENDA_PADRAO}
+          nomeRevenda={nomeRevenda || NOME_REVENDA_PADRAO}
         />
       </div>
 
       <div className="hidden md:block">
         <p className="text-sm font-semibold tracking-tight">
-          {nome?.trim() || NOME_REVENDA_PADRAO}
+          {nomeRevenda?.trim() || NOME_REVENDA_PADRAO}
         </p>
         <p className="text-xs capitalize text-zinc-500 dark:text-zinc-400">
           {dataLonga}
@@ -56,63 +93,104 @@ export function Header() {
       </div>
 
       <div className="ml-auto flex items-center gap-2 sm:gap-3">
-        <div
-          className={[
-            'hidden sm:flex items-stretch gap-0 overflow-hidden rounded-lg border',
-            'border-border-light bg-white dark:bg-surface-dark dark:border-border-dark',
-          ].join(' ')}
-          title="Lucro do mês realizado (carros vendidos)"
-        >
-          {/* Lucro total do negócio (MG) */}
-          <div className="flex items-center gap-2 px-3 py-1.5">
-            <TrendingUp size={16} className="text-primary" />
-            <div className="flex flex-col leading-tight">
-              <span className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                Lucro do mês · {marcaCurta}
-              </span>
-              <span
-                className={[
-                  'tabular text-sm font-semibold',
-                  positivo
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-red-600 dark:text-red-400',
-                ].join(' ')}
-              >
-                {formatarMoeda(lucro)}
-              </span>
-            </div>
-            {positivo ? (
-              <ArrowUpRight size={14} className="text-emerald-500" />
-            ) : (
-              <ArrowDownRight size={14} className="text-red-500" />
-            )}
-          </div>
-
-          {/* Parte do dono (Maicon) — só quando há carro a meia */}
-          {breakdown.temDivisao && (
-            <div className="flex flex-col justify-center border-l border-border-light px-3 py-1.5 leading-tight dark:border-border-dark">
-              <span className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                {nomeDono}
-              </span>
-              <span className="tabular text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                {formatarMoeda(breakdown.meu)}
-              </span>
-            </div>
-          )}
+        <div className="hidden items-stretch gap-2 md:flex">
+          <PainelLucro
+            label={`Mês · ${marcaCurta}`}
+            icone={<TrendingUp size={16} className="text-primary" />}
+            breakdown={breakdownMes}
+            positivo={positivoRevenda}
+            nomeDono={nomeDono}
+            titulo="Lucro líquido do mês — revenda (a meia + caixa) menos despesas gerais"
+          />
+          <PainelLucro
+            label={`Ano · ${hoje.getFullYear()}`}
+            icone={<CalendarRange size={16} className="text-primary" />}
+            breakdown={breakdownAno}
+            positivo={positivoRevendaAno}
+            nomeDono={nomeDono}
+            titulo="Lucro líquido acumulado no ano — revenda (a meia + caixa) menos despesas gerais"
+          />
         </div>
 
-        {/* Compacto em mobile */}
         <div
           className={[
-            'flex sm:hidden items-center gap-1 rounded-md border px-2 py-1 text-xs',
+            'flex md:hidden items-center gap-1.5 rounded-md border px-2 py-1 text-xs',
             'border-border-light dark:border-border-dark',
           ].join(' ')}
-          title={`Lucro do mês — ${dataCurta}`}
+          title={`Lucro líquido — mês (${dataCurta}) e acumulado do ano`}
         >
-          <TrendingUp size={12} className="text-primary" />
+          <span className="flex items-center gap-1">
+            <TrendingUp size={12} className="text-primary" />
+            <span
+              className={[
+                'tabular font-semibold',
+                positivoRevenda
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-red-600 dark:text-red-400',
+              ].join(' ')}
+            >
+              {formatarMoeda(lucroRevenda)}
+            </span>
+          </span>
+          <span className="text-zinc-300 dark:text-zinc-600">·</span>
+          <span className="flex items-center gap-1">
+            <CalendarRange size={12} className="text-primary" />
+            <span
+              className={[
+                'tabular font-semibold',
+                positivoRevendaAno
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-red-600 dark:text-red-400',
+              ].join(' ')}
+            >
+              {formatarMoeda(lucroRevendaAno)}
+            </span>
+          </span>
+        </div>
+
+        <ThemeToggle />
+      </div>
+    </header>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// Painel de lucro (mês ou ano) — valor principal + divisão dono/sócio quando
+// aplicável. Reaproveitado para os dois períodos exibidos no header.
+// -----------------------------------------------------------------------------
+function PainelLucro({
+  label,
+  icone,
+  breakdown,
+  positivo,
+  nomeDono,
+  titulo,
+}: {
+  label: string
+  icone: ReactNode
+  breakdown: LucroBreakdown
+  positivo: boolean
+  nomeDono: string
+  titulo: string
+}) {
+  const lucro = breakdown.revendaLiquido
+  return (
+    <div
+      className={[
+        'flex items-stretch gap-0 overflow-hidden rounded-lg border',
+        'border-border-light bg-white dark:bg-surface-dark dark:border-border-dark',
+      ].join(' ')}
+      title={titulo}
+    >
+      <div className="flex items-center gap-2 px-3 py-1.5">
+        {icone}
+        <div className="flex flex-col leading-tight">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            {label}
+          </span>
           <span
             className={[
-              'tabular font-semibold',
+              'tabular text-sm font-semibold',
               positivo
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-red-600 dark:text-red-400',
@@ -120,18 +198,43 @@ export function Header() {
           >
             {formatarMoeda(lucro)}
           </span>
-          {breakdown.temDivisao && (
-            <span className="text-zinc-500 dark:text-zinc-400">
-              · {nomeDono}{' '}
-              <span className="tabular font-semibold text-emerald-600 dark:text-emerald-400">
-                {formatarMoeda(breakdown.meu)}
-              </span>
-            </span>
-          )}
         </div>
-
-        <ThemeToggle />
+        {positivo ? (
+          <ArrowUpRight size={14} className="text-emerald-500" />
+        ) : (
+          <ArrowDownRight size={14} className="text-red-500" />
+        )}
       </div>
-    </header>
+
+      {(breakdown.temDivisao || breakdown.temPessoal) && (
+        <>
+          <div
+            className="hidden flex-col justify-center border-l border-border-light px-3 py-1.5 leading-tight lg:flex dark:border-border-dark"
+            title={
+              breakdown.temPessoal
+                ? `Revenda: ${formatarMoeda(breakdown.meuRevenda)} + pessoal (Golf, etc.): ${formatarMoeda(breakdown.pessoalLiquido)}`
+                : 'Sua parte na revenda compartilhada'
+            }
+          >
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              {nomeDono}
+            </span>
+            <span className="tabular text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              {formatarMoeda(breakdown.meu)}
+            </span>
+          </div>
+          {breakdown.temDivisao && (
+            <div className="hidden flex-col justify-center border-l border-border-light px-3 py-1.5 leading-tight lg:flex dark:border-border-dark">
+              <span className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Sócio
+              </span>
+              <span className="tabular text-sm font-semibold text-amber-600 dark:text-amber-400">
+                {formatarMoeda(breakdown.socio)}
+              </span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   )
 }

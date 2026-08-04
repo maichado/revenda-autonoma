@@ -9,6 +9,7 @@ import {
   Users,
 } from 'lucide-react'
 import type { Veiculo, Venda } from '@/types'
+import type { ResumoFinanceiroVeiculo } from '@/utils/calculos'
 import { StatusBadge } from './Badge'
 import { TempoEstoqueResumo } from './TempoEstoqueResumo'
 import { formatarMoeda, formatarPercentual } from '@/utils/formatadores'
@@ -16,17 +17,29 @@ import { calcularMetricasTempoVeiculo } from '@/utils/tempoVeiculo'
 
 interface Props {
   veiculo: Veiculo
-  margemEsperada: number
+  resumo: ResumoFinanceiroVeiculo
   venda?: Venda
   onEditar: () => void
   onExcluir: () => void
   onRegistrarVenda: () => void
 }
 
+function classesLucro(valor: number): string {
+  if (valor < 0) return 'text-red-600 dark:text-red-400'
+  if (valor > 0) return 'text-emerald-600 dark:text-emerald-400'
+  return 'text-zinc-600 dark:text-zinc-400'
+}
+
+function classesMargem(margem: number): string {
+  if (margem < 0) return 'bg-red-500/15 text-red-600 dark:text-red-400'
+  if (margem < 10) return 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+  return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+}
+
 // Card padrão da listagem do estoque.
 export function VeiculoCard({
   veiculo,
-  margemEsperada,
+  resumo,
   venda,
   onEditar,
   onExcluir,
@@ -35,7 +48,6 @@ export function VeiculoCard({
   const [menuAberto, setMenuAberto] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // Fechar menu ao clicar fora.
   useEffect(() => {
     if (!menuAberto) return
     const onClick = (e: MouseEvent) => {
@@ -48,16 +60,6 @@ export function VeiculoCard({
   }, [menuAberto])
 
   const fotoCapa = veiculo.fotos[0]
-
-  // Cor da pill de margem: >=10% verde, 0-10% âmbar, <0 vermelho.
-  let pillMargemClasse =
-    'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-  if (margemEsperada < 0) {
-    pillMargemClasse = 'bg-red-500/15 text-red-600 dark:text-red-400'
-  } else if (margemEsperada < 10) {
-    pillMargemClasse = 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-  }
-
   const podeVender = veiculo.status === 'disponível'
   const metricasTempo = calcularMetricasTempoVeiculo(veiculo, venda)
 
@@ -68,7 +70,6 @@ export function VeiculoCard({
         'transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-card-dark',
       ].join(' ')}
     >
-      {/* Foto / placeholder */}
       <div className="relative aspect-[16/10] w-full overflow-hidden bg-zinc-100 dark:bg-white/[0.04]">
         {fotoCapa ? (
           <img
@@ -85,12 +86,10 @@ export function VeiculoCard({
           </div>
         )}
 
-        {/* Status no canto */}
         <div className="absolute left-3 top-3">
           <StatusBadge status={veiculo.status} />
         </div>
 
-        {/* Menu de ações */}
         <div ref={menuRef} className="absolute right-2 top-2">
           <button
             type="button"
@@ -163,7 +162,6 @@ export function VeiculoCard({
         </div>
       </div>
 
-      {/* Conteúdo */}
       <div className="flex flex-1 flex-col gap-2 p-4">
         <div className="flex items-start justify-between gap-2">
           <span className="tabular rounded-md border border-border-light bg-zinc-50 px-2 py-0.5 text-xs font-semibold tracking-wider text-zinc-700 dark:border-border-dark dark:bg-white/[0.06] dark:text-zinc-200">
@@ -198,27 +196,59 @@ export function VeiculoCard({
 
         <TempoEstoqueResumo metricas={metricasTempo} className="mt-1" />
 
-        <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-          <div>
-            <p className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Venda pretendida
-            </p>
-            <p className="tabular text-lg font-semibold tracking-tight">
-              {formatarMoeda(veiculo.valor_venda_pretendido)}
-            </p>
-          </div>
-          <span
-            className={[
-              'badge whitespace-nowrap',
-              pillMargemClasse,
-            ].join(' ')}
-            title="Margem esperada = (venda − compra − despesas) / compra"
-          >
-            <Gauge size={11} />
-            <span className="tabular">
-              {formatarPercentual(margemEsperada, 1)}
+        <div className="mt-auto space-y-2 border-t border-border-light pt-2 dark:border-border-dark">
+          <div className="flex items-end justify-between gap-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                {resumo.rotuloVenda}
+              </p>
+              <p className="tabular text-lg font-semibold tracking-tight">
+                {formatarMoeda(resumo.valorVenda)}
+              </p>
+            </div>
+            <span
+              className={['badge whitespace-nowrap', classesMargem(resumo.margemPercentual)].join(
+                ' ',
+              )}
+              title="Margem sobre o valor de compra"
+            >
+              <Gauge size={11} />
+              <span className="tabular">
+                {formatarPercentual(resumo.margemPercentual, 1)}
+              </span>
             </span>
-          </span>
+          </div>
+
+          <div className="flex items-end justify-between gap-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Lucro líquido
+                {resumo.vendido ? '' : ' (est.)'}
+              </p>
+              <p
+                className={[
+                  'tabular text-base font-bold',
+                  classesLucro(resumo.lucroLiquido),
+                ].join(' ')}
+              >
+                {resumo.lucroLiquido >= 0 ? '+' : ''}
+                {formatarMoeda(resumo.lucroLiquido)}
+              </p>
+            </div>
+            {veiculo.tipo_propriedade === 'meia' && (
+              <p className="text-right text-[11px] text-zinc-500 dark:text-zinc-400">
+                Sua parte
+                <span
+                  className={[
+                    'ml-1 tabular font-semibold',
+                    classesLucro(resumo.lucroMeu),
+                  ].join(' ')}
+                >
+                  {formatarMoeda(resumo.lucroMeu)}
+                </span>
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </article>

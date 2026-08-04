@@ -1,18 +1,17 @@
 // Regras do módulo Banco Pessoal — visão pessoal do dono (Maicon).
-
 //
-
-// Pool pessoal (capital + reinvestimento):
-
-//   • Começa com capital inicial (ex.: R$ 38.000)
-
-//   • Compra de carro consome sua parte (solo 100%, meia 50%) do pool
-
-//   • Venda devolve sua parte do valor de venda ao pool → reinvestimento
-
-//   • O que passar do pool vira dinheiro pessoal extra (a devolver)
-
-//   • Despesas com `pago_por` = dono também entram em "a devolver"
+// Dois caixas operacionais + controle de bolso:
+//   1. Caixa investimento (só Maicon) — capital inicial + reinvestimento das vendas
+//   2. Caixa revenda (Maicon + sócio) — compras a meia e despesas da loja
+//   3. A devolver — bolso usado na compra; ao marcar devolvido, SAI do caixa investimento
+//
+// Caixa investimento (só Maicon):
+//   • Capital inicial + vendas de carros 100% seus (ex.: Golf)
+//   • NÃO recebe venda a meia — esse giro fica no caixa revenda
+//
+// Caixa revenda (Maicon + sócio):
+//   • Venda a meia → entra inteira → recompra o próximo carro a meia
+//   • Ciclo: vendeu Palio → comprou Gol (reenvestimento da revenda)
 
 
 
@@ -26,6 +25,8 @@ import type {
 
   MovimentacaoPool,
 
+  MovimentacaoCaixaRevenda,
+
   StatusCarroPessoal,
 
   StatusVeiculo,
@@ -38,16 +39,33 @@ import type {
 
 } from '@/types'
 
-import { despesasDoVeiculo } from '@/utils/calculos'
+import {
+  classificarOrigemLucroVeiculo,
+  despesasDoVeiculo,
+} from '@/utils/calculos'
 import { NOME_REVENDA_PADRAO } from '@/constants/marca'
-import { despesasCaixaRevenda } from '@/utils/despesaOrigem'
-import { primeiroNomeSocio, socioPrincipal } from '@/utils/socios'
+import { despesasCaixaRevenda, resolverOrigemDespesa } from '@/utils/despesaOrigem'
+import {
+  normalizarListaSocios,
+  primeiroNomeSocio,
+  socioPrincipal,
+} from '@/utils/socios'
+
+/** Devolução ao bolso pessoal — debita o caixa investimento. */
+export interface DevolucaoPool {
+  id: string
+  valor: number
+  detalhe: string
+  data?: string
+}
 
 /** Parâmetros extras para debitar despesas do caixa da loja na simulação. */
 export interface OpcoesSimulacaoCaixa {
   despesas?: Despesa[]
   nomeRevenda?: string
   socios?: string[]
+  /** Valores já devolvidos ao bolso — reduzem o caixa investimento disponível. */
+  devolucoes?: DevolucaoPool[]
 }
 
 function opcoesCaixaResolvidas(opcoes?: OpcoesSimulacaoCaixa) {
@@ -55,14 +73,52 @@ function opcoesCaixaResolvidas(opcoes?: OpcoesSimulacaoCaixa) {
     despesas: opcoes?.despesas ?? [],
     nomeRevenda: opcoes?.nomeRevenda?.trim() || NOME_REVENDA_PADRAO,
     socios: opcoes?.socios ?? [],
+    devolucoes: opcoes?.devolucoes ?? [],
   }
+}
+
+/**
+ * Data em que a devolução debita o caixa investimento.
+ * Se o lançamento é de um carro já vendido, usa a data da venda (ou a mais
+ * tarde entre compra e venda) — assim "devolver após vender o Golf" cai
+ * depois que os R$ 50 mil entraram, e não na data antiga da compra.
+ */
+export function dataEfetivaDevolucao(
+  lancamento: Pick<LancamentoBancoPessoal, 'data' | 'veiculo_id' | 'carro_id'>,
+  vendas: Venda[] = [],
+): string {
+  const base = lancamento.data || ''
+  const veiculoId = lancamento.veiculo_id || lancamento.carro_id
+  if (!veiculoId) return base
+  const venda = vendas.find((v) => v.veiculo_id === veiculoId)
+  const dataVenda = venda?.data || ''
+  if (!dataVenda) return base
+  if (!base) return dataVenda
+  return dataVenda.localeCompare(base) > 0 ? dataVenda : base
+}
+
+export function devolucoesPoolFromLancamentos(
+  lancamentos: LancamentoBancoPessoal[],
+  vendas: Venda[] = [],
+): DevolucaoPool[] {
+  return lancamentos
+    .filter((l) => l.status === 'devolvido')
+    .map((l) => ({
+      id: `devolucao-${l.id}`,
+      valor: Number(l.valor) || 0,
+      detalhe: `Devolução ao bolso — ${l.descricao}`,
+      data: dataEfetivaDevolucao(l, vendas) || undefined,
+    }))
+    .filter((d) => d.valor > 0)
+    .sort((a, b) => (a.data ?? '9999-12-31').localeCompare(b.data ?? '9999-12-31'))
 }
 
 
 
-/** Capital pessoal padrão do dono quando não configurado no servidor. */
-
-export const CAPITAL_INICIAL_PADRAO = 38000
+/** Arredonda para centavos (evita 34.399,87 por float). */
+export function dinheiro(n: number): number {
+  return Math.round((Number(n) || 0) * 100) / 100
+}
 
 
 
@@ -168,10 +224,337 @@ export function lucroMeuCarro(carro: CarroBancoPessoal): number | null {
 
 }
 
+/** Revenda total na compra e split dono / sócio. */
+export function splitRevendaCarro(
+  carro: CarroBancoPessoal,
+  veiculo?: Veiculo,
+): { total: number; meu: number; socio: number } {
+  if (veiculo?.compra_funding_manual) {
+    const total = Math.max(0, Number(veiculo.compra_funding_revenda) || 0)
+    return {
+      total,
+      meu: revendaMeuNaCompra(veiculo),
+      socio: revendaSocioNaCompra(veiculo),
+    }
+  }
+  const totalRevenda = Math.max(0, Number(carro.do_revenda) || 0)
+  const socioManual = Math.max(0, Number(carro.do_revenda_socio) || 0)
+  if (socioManual > 0) {
+    return {
+      total: totalRevenda + socioManual,
+      meu: totalRevenda,
+      socio: socioManual,
+    }
+  }
+  if (carro.tipo_propriedade === 'meia' && totalRevenda > 0) {
+    const meu = totalRevenda * carro.fracao_maicon
+    return { total: totalRevenda, meu, socio: totalRevenda - meu }
+  }
+  return { total: totalRevenda, meu: totalRevenda, socio: 0 }
+}
 
+export interface CarroCaixaRevenda {
+  veiculo_id: string
+  nome: string
+  placa: string
+  status: StatusCarroPessoal
+  revendaTotal: number
+  revendaMeu: number
+  revendaSocio: number
+  lucroMeu: number | null
+  lucroSocio: number | null
+  valorVenda: number | null
+}
+
+export interface ResumoCaixaRevendaCard {
+  saldoTotal: number
+  parteDono: number
+  parteSocio: number
+  nomeDono: string
+  nomeSocio: string
+  lucroVendidosMeu: number
+  lucroVendidosSocio: number
+  carros: CarroCaixaRevenda[]
+  /** Lista completa (modal). */
+  todosCarros: CarroCaixaRevenda[]
+  modoCompacto: boolean
+  qtdCarros: number
+}
+
+/** Acima deste limite o card mostra só sócio 1 / sócio 2 (sem listar carros). */
+export const LIMITE_CARROS_MINI_RELATORIO = 4
+
+export function resumoCaixaRevendaCard(
+  carros: CarroBancoPessoal[],
+  veiculos: Veiculo[],
+  saldoRevenda: number,
+  socios: string[],
+): ResumoCaixaRevendaCard {
+  const [nomeDonoCompleto, nomeSocioCompleto] = normalizarListaSocios(socios)
+  const veicMap = new Map(veiculos.map((v) => [v.id, v]))
+  const lista: CarroCaixaRevenda[] = []
+  let lucroVendidosMeu = 0
+  let lucroVendidosSocio = 0
+
+  for (const carro of carros) {
+    const veiculo = veicMap.get(carro.veiculo_id)
+    const poolNaCompra =
+      (Number(carro.do_investimento) || 0) +
+      (Number(carro.extrapessoal_compra) || 0)
+    const origem =
+      veiculo?.tipo_propriedade === 'meia'
+        ? 'compartilhada'
+        : poolNaCompra > 0
+          ? 'pessoal'
+          : classificarOrigemLucroVeiculo(veiculo)
+    const split = splitRevendaCarro(carro, veiculo)
+    const vinculadoRevenda =
+      split.total > 0 || origem === 'compartilhada'
+    if (!vinculadoRevenda) continue
+
+    const lucroTotal = lucroCarro(carro)
+    const lucroMeu =
+      lucroTotal != null ? lucroTotal * carro.fracao_maicon : null
+    const lucroSocio =
+      lucroTotal != null ? lucroTotal * (1 - carro.fracao_maicon) : null
+
+    if (lucroMeu != null) lucroVendidosMeu += lucroMeu
+    if (lucroSocio != null) lucroVendidosSocio += lucroSocio
+
+    lista.push({
+      veiculo_id: carro.veiculo_id,
+      nome: carro.nome,
+      placa: carro.placa,
+      status: carro.status,
+      revendaTotal: split.total,
+      revendaMeu: split.meu,
+      revendaSocio: split.socio,
+      lucroMeu,
+      lucroSocio,
+      valorVenda: carro.valor_venda ?? null,
+    })
+  }
+
+  lista.sort((a, b) => {
+    if (a.status !== b.status) {
+      return a.status === 'vendido' ? 1 : -1
+    }
+    return a.nome.localeCompare(b.nome, 'pt-BR')
+  })
+
+  const qtdCarros = lista.length
+  const modoCompacto = qtdCarros > LIMITE_CARROS_MINI_RELATORIO
+
+  return {
+    saldoTotal: saldoRevenda,
+    parteDono: saldoRevenda / 2,
+    parteSocio: saldoRevenda / 2,
+    nomeDono: primeiroNomeSocio(nomeDonoCompleto) || nomeDonoCompleto,
+    nomeSocio: primeiroNomeSocio(nomeSocioCompleto) || nomeSocioCompleto,
+    lucroVendidosMeu,
+    lucroVendidosSocio,
+    carros: modoCompacto ? [] : lista,
+    todosCarros: lista,
+    modoCompacto,
+    qtdCarros,
+  }
+}
+
+/** Onde está o dinheiro da revenda hoje (caixa líquido + aplicado em carros). */
+export interface VisaoPatrimonioRevenda {
+  emCaixa: number
+  emCarros: number
+  /** Despesas (caixa revenda) dos carros ainda em estoque. */
+  totalDespesas: number
+  totalNoGiro: number
+  carrosEstoque: CarroCaixaRevenda[]
+}
+
+/** Soma despesas pagas pelo caixa revenda, só de carros em estoque no giro. */
+export function despesasRevendaEmCarrosEstoque(
+  carros: CarroCaixaRevenda[],
+  despesas: Despesa[],
+  nomeRevenda: string,
+  socios: string[],
+): number {
+  const idsEstoque = new Set(
+    carros.filter((c) => c.status !== 'vendido').map((c) => c.veiculo_id),
+  )
+  if (idsEstoque.size === 0) return 0
+
+  return despesas.reduce((s, d) => {
+    if (!d.veiculo_id || !idsEstoque.has(d.veiculo_id)) return s
+    if (resolverOrigemDespesa(d.pago_por, nomeRevenda, socios) !== 'revenda') {
+      return s
+    }
+    return s + Math.max(0, Number(d.valor) || 0)
+  }, 0)
+}
+
+/** Soma despesas do caixa revenda de um carro em estoque. */
+export function despesasRevendaDoCarro(
+  veiculoId: string,
+  despesas: Despesa[],
+  nomeRevenda: string,
+  socios: string[],
+): number {
+  return despesas.reduce((s, d) => {
+    if (d.veiculo_id !== veiculoId) return s
+    if (resolverOrigemDespesa(d.pago_por, nomeRevenda, socios) !== 'revenda') {
+      return s
+    }
+    return s + Math.max(0, Number(d.valor) || 0)
+  }, 0)
+}
+
+export type TipoEtapaGiro = 'venda' | 'compra' | 'despesas' | 'caixa_atual'
+
+export interface EtapaGiroRevenda {
+  id: string
+  tipo: TipoEtapaGiro
+  nome: string
+  valor: number
+  veiculo_id?: string
+  /** Compra ainda em estoque — valor virou carro. */
+  virouCarro?: boolean
+}
+
+/** Um ciclo visual: vendeu → comprou → sobrou. */
+export interface FluxoGiroRevenda {
+  id: string
+  data: string
+  etapas: EtapaGiroRevenda[]
+}
+
+export function montarVisaoPatrimonioRevenda(
+  saldoCaixa: number,
+  carros: CarroCaixaRevenda[],
+  despesas: Despesa[],
+  nomeRevenda: string,
+  socios: string[],
+): VisaoPatrimonioRevenda {
+  const carrosEstoque = carros.filter(
+    (c) => c.status !== 'vendido' && c.revendaTotal > 0,
+  )
+  const emCarros = carrosEstoque.reduce((s, c) => s + c.revendaTotal, 0)
+  const totalDespesas = despesasRevendaEmCarrosEstoque(
+    carros,
+    despesas,
+    nomeRevenda,
+    socios,
+  )
+  return {
+    emCaixa: saldoCaixa,
+    emCarros,
+    totalDespesas,
+    totalNoGiro: saldoCaixa + emCarros + totalDespesas,
+    carrosEstoque,
+  }
+}
+
+/** Monta fluxos visuais — estado atual bate com o painel de cima. */
+export function montarFluxosGiroRevenda(
+  movimentacoes: MovimentacaoCaixaRevenda[],
+  carros: CarroCaixaRevenda[],
+  despesas: Despesa[],
+  nomeRevenda: string,
+  socios: string[],
+  saldoCaixaAtual: number,
+): FluxoGiroRevenda[] {
+  const estoquePorId = new Map(
+    carros
+      .filter((c) => c.status !== 'vendido')
+      .map((c) => [c.veiculo_id, c]),
+  )
+
+  const fluxos: FluxoGiroRevenda[] = []
+  let pendente: FluxoGiroRevenda | null = null
+
+  for (const m of movimentacoes) {
+    if (m.tipo === 'venda') {
+      if (pendente?.etapas.length) fluxos.push(pendente)
+      pendente = {
+        id: m.id,
+        data: m.data,
+        etapas: [
+          {
+            id: `${m.id}-venda`,
+            tipo: 'venda',
+            nome: m.carro_nome ?? 'Carro',
+            valor: m.valor,
+            veiculo_id: m.veiculo_id,
+          },
+        ],
+      }
+      continue
+    }
+
+    if (m.tipo === 'compra') {
+      const valor = Math.abs(m.valor)
+      const nome = m.carro_nome ?? 'Carro'
+      const emEstoque = Boolean(
+        m.veiculo_id && estoquePorId.has(m.veiculo_id),
+      )
+
+      const fluxo: FluxoGiroRevenda = pendente ?? {
+        id: m.id,
+        data: m.data,
+        etapas: [],
+      }
+
+      fluxo.etapas.push({
+        id: `${m.id}-compra`,
+        tipo: 'compra',
+        nome,
+        valor,
+        veiculo_id: m.veiculo_id,
+        virouCarro: emEstoque,
+      })
+
+      fluxos.push(fluxo)
+      pendente = null
+      continue
+    }
+
+    // Despesas entram no fluxo do carro em estoque + painel geral.
+  }
+
+  if (pendente?.etapas.length) {
+    fluxos.push(pendente)
+  }
+
+  const ultimo = fluxos.at(-1)
+  if (ultimo) {
+    const compra = [...ultimo.etapas].reverse().find((e) => e.tipo === 'compra')
+    if (compra?.veiculo_id && compra.virouCarro) {
+      const desp = despesasRevendaDoCarro(
+        compra.veiculo_id,
+        despesas,
+        nomeRevenda,
+        socios,
+      )
+      if (desp > 0) {
+        ultimo.etapas.push({
+          id: `${ultimo.id}-despesas`,
+          tipo: 'despesas',
+          nome: compra.nome,
+          valor: desp,
+          veiculo_id: compra.veiculo_id,
+        })
+      }
+    }
+    ultimo.etapas.push({
+      id: `${ultimo.id}-caixa-atual`,
+      tipo: 'caixa_atual',
+      nome: 'Em caixa hoje',
+      valor: saldoCaixaAtual,
+    })
+  }
+
+  return fluxos
+}
 
 export interface StatusCarroMeta {
-
   label: string
 
   badge: string
@@ -312,25 +695,169 @@ export function pessoalSocioNaCompra(v: Veiculo): number {
   ).socio
 }
 
-/** Valores sugeridos para o formulário (revenda = 100% da loja). */
+/**
+ * A meia: valor informado em "investimento" SEM marcar 50/50 sócio
+ * = aporte seu (capital/reinvestimento) que entra no caixa revenda antes da compra.
+ */
+export function aporteInvestimentoParaRevenda(v: Veiculo): number {
+  if (v.tipo_propriedade !== 'meia' || !veiculoTemFundingManual(v)) return 0
+  const inv = Math.max(0, Number(v.compra_funding_investimento) || 0)
+  if (inv <= 0) return 0
+  if (v.compra_funding_investimento_meia_socio) return 0
+  return inv
+}
+
+/** Investimento que debita o pool sem virar aporte na revenda (ex.: metade com sócio no campo). */
+export function investimentoPoolDiretoNaCompra(v: Veiculo): number {
+  if (aporteInvestimentoParaRevenda(v) > 0) return 0
+  return investimentoPoolNaCompra(v)
+}
+
+/**
+ * Metade do sócio como aporte novo na loja (não consome o caixa que já tinha).
+ *
+ * Dois cadastros válidos:
+ * 1) Limpo: investimento = metade (seu aporte), revenda = 0 → sócio completa a outra metade
+ * 2) Legado: revenda = 100% da compra (meia) + investimento = seu aporte
+ */
+export function aporteSocioExternoRevenda(
+  v: Veiculo,
+  valorCompra: number,
+): number {
+  if (v.tipo_propriedade !== 'meia' || !veiculoTemFundingManual(v)) return 0
+  const aporte = aporteInvestimentoParaRevenda(v)
+  if (aporte <= 0) return 0
+  const revTotal = Math.max(0, Number(v.compra_funding_revenda) || 0)
+  const metade = dinheiro(valorCompra / 2)
+
+  if (revTotal + 0.01 >= valorCompra && v.compra_funding_revenda_meia_socio) {
+    return revendaSocioNaCompra(v)
+  }
+
+  if (revTotal <= 0 && Math.abs(aporte - metade) < 0.5) {
+    return metade
+  }
+
+  return 0
+}
+
+/** Valores sugeridos para o formulário — respeita saldos e tipo do carro. */
+export interface SugestaoFundingCompra {
+  revenda: number
+  investimento: number
+  pessoal: number
+  revendaMeiaSocio: boolean
+  investimentoMeiaSocio: boolean
+  pessoalMeiaSocio: boolean
+}
+
+/** Soma despesas do dono ainda não reembolsadas (reservam o caixa investimento). */
+export function totalDespesasPessoaisPendentes(
+  despesas: Despesa[],
+  socios: string[] = [],
+): number {
+  const dono = nomeDonoCompleto(socios)
+  let total = 0
+  for (const d of despesas) {
+    if (d.reembolsado) continue
+    if (!ehPagoPorDono(d.pago_por, dono)) continue
+    total += Number(d.valor) || 0
+  }
+  return dinheiro(total)
+}
+
+/** Saldos livres antes de registrar a compra de um veículo (integração Banco Pessoal). */
+export function saldosCaixasDisponiveis(
+  veiculos: Veiculo[],
+  vendas: Venda[],
+  capitalInicial: number,
+  opcoesCaixa?: OpcoesSimulacaoCaixa,
+  excluirVeiculoId?: string,
+): { caixaRevenda: number; caixaInvestimento: number } {
+  const lista = excluirVeiculoId
+    ? veiculos.filter((v) => v.id !== excluirVeiculoId)
+    : veiculos
+  const sim = simularPoolPessoal(lista, vendas, capitalInicial, opcoesCaixa)
+  const extrato = dinheiro(sim.saldoFinal)
+  const reservado = dinheiro(
+    Math.min(
+      extrato,
+      totalDespesasPessoaisPendentes(
+        opcoesCaixa?.despesas ?? [],
+        opcoesCaixa?.socios ?? [],
+      ),
+    ),
+  )
+  return {
+    caixaRevenda: sim.saldoRevendaFinal,
+    caixaInvestimento: dinheiro(extrato - reservado),
+  }
+}
+
 export function sugerirFundingCompraFormulario(
   veiculo: Veiculo,
   veiculos: Veiculo[],
   vendas: Venda[],
   capitalInicial: number,
   opcoesCaixa?: OpcoesSimulacaoCaixa,
-): { revenda: number; investimento: number; pessoal: number } {
-  const f = previewFundingCompra(
-    veiculo,
+): SugestaoFundingCompra {
+  const valorCompra = Number(veiculo.valor_compra) || 0
+  const isMeia = veiculo.tipo_propriedade === 'meia'
+  const vazio: SugestaoFundingCompra = {
+    revenda: 0,
+    investimento: 0,
+    pessoal: 0,
+    revendaMeiaSocio: false,
+    investimentoMeiaSocio: false,
+    pessoalMeiaSocio: false,
+  }
+  if (valorCompra <= 0) return vazio
+
+  const { caixaRevenda, caixaInvestimento } = saldosCaixasDisponiveis(
     veiculos,
     vendas,
     capitalInicial,
     opcoesCaixa,
+    veiculo.id,
   )
+
+  let restante = valorCompra
+  let revenda = 0
+  let investimento = 0
+
+  if (isMeia) {
+    // A meia: revenda paga o carro inteiro (caixa compartilhado); pool só cobre sua metade menos o que a revenda já cobriu da sua parte
+    if (caixaRevenda > 0) {
+      revenda = Math.min(valorCompra, caixaRevenda)
+    }
+    const minhaParte = valorCompra / 2
+    const doRevendaMaicon = revenda / 2
+    const needPool = Math.max(0, minhaParte - doRevendaMaicon)
+    if (needPool > 0 && caixaInvestimento > 0) {
+      investimento = Math.min(needPool, caixaInvestimento)
+    }
+    restante = Math.max(0, needPool - investimento)
+  } else {
+    // Solo: investimento primeiro, revenda se sobrar necessidade, depois bolso
+    if (caixaInvestimento > 0) {
+      investimento = Math.min(restante, caixaInvestimento)
+      restante -= investimento
+    }
+    if (restante > 0 && caixaRevenda > 0) {
+      revenda = Math.min(restante, caixaRevenda)
+      restante -= revenda
+    }
+  }
+
+  const pessoal = Math.max(0, restante)
+
   return {
-    revenda: f.do_revenda,
-    investimento: investimentoFunding(f),
-    pessoal: f.do_bolso,
+    revenda,
+    investimento,
+    pessoal,
+    revendaMeiaSocio: isMeia && revenda > 0,
+    investimentoMeiaSocio: isMeia && investimento > 0,
+    pessoalMeiaSocio: isMeia && pessoal > 0,
   }
 }
 
@@ -344,14 +871,139 @@ function aplicarInvestimentoPool(
   saldoCapitalInicial: number
   saldoReinvestimento: number
 } {
-  const doCapital = Math.min(valor, saldoCapitalInicial)
-  const restante = valor - doCapital
-  const doReinvest = Math.min(restante, saldoReinvestimento)
+  const pedido = dinheiro(valor)
+  let cap = dinheiro(saldoCapitalInicial)
+  let rein = dinheiro(saldoReinvestimento)
+  const doCapital = Math.min(pedido, cap)
+  const restante = dinheiro(pedido - doCapital)
+  const doReinvest = Math.min(restante, rein)
+  cap = dinheiro(cap - doCapital)
+  rein = dinheiro(rein - doReinvest)
   return {
+    doCapital: dinheiro(doCapital),
+    doReinvest: dinheiro(doReinvest),
+    saldoCapitalInicial: cap,
+    saldoReinvestimento: rein,
+  }
+}
+
+/** Funding automático (sem campos manuais) — mesma ordem que sugerirFundingCompraFormulario. */
+function fundingAutomaticoCompra(
+  valorCompra: number,
+  tipoPropriedade: Veiculo['tipo_propriedade'],
+  saldoRevenda: number,
+  saldoCapitalInicial: number,
+  saldoReinvestimento: number,
+): {
+  doRevendaTotal: number
+  doCapital: number
+  doReinvest: number
+  doBolso: number
+  doInvestimento: number
+  saldoRevenda: number
+  saldoCapitalInicial: number
+  saldoReinvestimento: number
+} {
+  const fracao = fracaoMaicon(tipoPropriedade)
+  const isMeia = tipoPropriedade === 'meia'
+  let doRevendaTotal = 0
+  let doCapital = 0
+  let doReinvest = 0
+  let doBolso = 0
+  let rev = saldoRevenda
+  let cap = saldoCapitalInicial
+  let rein = saldoReinvestimento
+
+  if (isMeia) {
+    doRevendaTotal = Math.min(valorCompra, rev)
+    rev -= doRevendaTotal
+    const minhaParteCompra = fracao * valorCompra
+    const doRevendaMaicon = valorCompra > 0 ? doRevendaTotal * fracao : 0
+    const debitoPool = Math.max(0, minhaParteCompra - doRevendaMaicon)
+    doCapital = Math.min(debitoPool, cap)
+    const restante = debitoPool - doCapital
+    doReinvest = Math.min(restante, rein)
+    doBolso = restante - doReinvest
+    cap -= doCapital
+    rein -= doReinvest
+  } else {
+    let restante = valorCompra
+    doCapital = Math.min(restante, cap)
+    restante -= doCapital
+    cap -= doCapital
+    doReinvest = Math.min(restante, rein)
+    restante -= doReinvest
+    rein -= doReinvest
+    doRevendaTotal = Math.min(restante, rev)
+    restante -= doRevendaTotal
+    rev -= doRevendaTotal
+    doBolso = restante
+  }
+
+  return {
+    doRevendaTotal,
     doCapital,
     doReinvest,
-    saldoCapitalInicial: saldoCapitalInicial - doCapital,
-    saldoReinvestimento: saldoReinvestimento - doReinvest,
+    doBolso,
+    doInvestimento: doCapital + doReinvest,
+    saldoRevenda: rev,
+    saldoCapitalInicial: cap,
+    saldoReinvestimento: rein,
+  }
+}
+
+/** Devolução ao bolso — consome reinvestimento primeiro, depois capital inicial. */
+function debitarCaixaInvestimento(
+  valor: number,
+  saldoCapitalInicial: number,
+  saldoReinvestimento: number,
+): {
+  saldoCapitalInicial: number
+  saldoReinvestimento: number
+  debitado: number
+} {
+  const pedido = dinheiro(valor)
+  const rein = dinheiro(saldoReinvestimento)
+  const cap = dinheiro(saldoCapitalInicial)
+  const doReinvest = Math.min(Math.max(pedido, 0), rein)
+  const restante = dinheiro(Math.max(pedido, 0) - doReinvest)
+  const doCapital = Math.min(restante, cap)
+  return {
+    saldoReinvestimento: dinheiro(rein - doReinvest),
+    saldoCapitalInicial: dinheiro(cap - doCapital),
+    debitado: dinheiro(doReinvest + doCapital),
+  }
+}
+
+/** Onde entra o valor de uma venda — caixas separados, sem misturar. */
+export function distribuirVendaPool(
+  veiculo: Veiculo,
+  valorVenda: number,
+  funding?: FundingCompra,
+): { creditoPool: number; creditoRevenda: number; detalhe: string } {
+  const origem = classificarOrigemLucroVeiculo(veiculo, funding)
+  const nome = nomeVeiculo(veiculo)
+
+  if (origem === 'compartilhada') {
+    return {
+      creditoPool: 0,
+      creditoRevenda: valorVenda,
+      detalhe: `Venda ${nome} — ${formatarMoedaCurta(valorVenda)} no caixa revenda (giro a meia: vendeu → recompra)`,
+    }
+  }
+
+  if (origem === 'pessoal') {
+    return {
+      creditoPool: valorVenda,
+      creditoRevenda: 0,
+      detalhe: `Venda ${nome} — ${formatarMoedaCurta(valorVenda)} no caixa investimento (100% seu)`,
+    }
+  }
+
+  return {
+    creditoPool: 0,
+    creditoRevenda: valorVenda,
+    detalhe: `Venda ${nome} — ${formatarMoedaCurta(valorVenda)} no caixa revenda`,
   }
 }
 
@@ -375,6 +1027,14 @@ export interface SimulacaoPoolPessoal {
 
   /** Caixa livre da revenda após simulação. */
   saldoRevendaFinal: number
+
+  /** Caixa investimento antes de devolver ao bolso. */
+  saldoInvestimentoBruto: number
+
+  totalDevolvidoAoBolso: number
+
+  /** Extrato do caixa revenda (vendas a meia → recompras). */
+  movimentacoesRevenda: MovimentacaoCaixaRevenda[]
 
 }
 
@@ -420,6 +1080,18 @@ type EventoPool =
 
     }
 
+  | {
+
+      tipo: 'devolucao'
+
+      data: string
+
+      devolucao: DevolucaoPool
+
+      ordem: number
+
+    }
+
 
 
 function nomeVeiculo(v: Veiculo): string {
@@ -455,6 +1127,8 @@ function montarEventosPool(
   vendas: Venda[],
 
   despesasRevenda: Despesa[] = [],
+
+  devolucoes: DevolucaoPool[] = [],
 
 ): EventoPool[] {
 
@@ -510,9 +1184,18 @@ function montarEventosPool(
 
   }
 
+  for (const dev of devolucoes) {
+    eventos.push({
+      tipo: 'devolucao',
+      data: dev.data ?? '',
+      devolucao: dev,
+      ordem: ordem++,
+    })
+  }
 
 
-  // Mesmo dia: venda → compra → despesa da loja.
+
+  // Mesmo dia: venda → devolução ao bolso → compra → despesa da loja.
 
   eventos.sort((a, b) => {
 
@@ -524,9 +1207,11 @@ function montarEventosPool(
 
       if (e.tipo === 'venda') return 0
 
-      if (e.tipo === 'compra') return 1
+      if (e.tipo === 'devolucao') return 1
 
-      return 2
+      if (e.tipo === 'compra') return 2
+
+      return 3
 
     }
 
@@ -596,9 +1281,15 @@ export function simularPoolPessoal(
 
   const movimentacoes: MovimentacaoPool[] = []
 
-
+  const movimentacoesRevenda: MovimentacaoCaixaRevenda[] = []
 
   const saldoTotal = () => saldoCapitalInicial + saldoReinvestimento
+
+  const registrarRevenda = (
+    mov: Omit<MovimentacaoCaixaRevenda, 'saldo_apos'>,
+  ) => {
+    movimentacoesRevenda.push({ ...mov, saldo_apos: saldoRevenda })
+  }
 
 
 
@@ -624,13 +1315,90 @@ export function simularPoolPessoal(
 
 
 
-  for (const ev of montarEventosPool(veiculos, vendas, despesasRevenda)) {
+  let totalDevolvidoAoBolso = 0
+
+  /** Devoluções que não cabiam no caixa na data — debitam no próximo crédito. */
+  const devolucoesEmFila: Array<{
+    id: string
+    detalhe: string
+    restante: number
+  }> = []
+
+  const tentarDevolucao = (
+    id: string,
+    data: string,
+    valor: number,
+    detalhe: string,
+  ) => {
+    const pedido = Math.max(0, valor)
+    if (pedido <= 0) return
+    const debito = debitarCaixaInvestimento(
+      pedido,
+      saldoCapitalInicial,
+      saldoReinvestimento,
+    )
+    saldoCapitalInicial = debito.saldoCapitalInicial
+    saldoReinvestimento = debito.saldoReinvestimento
+    totalDevolvidoAoBolso += debito.debitado
+    if (debito.debitado > 0) {
+      movimentacoes.push({
+        id,
+        data,
+        tipo: 'devolucao',
+        valor: -debito.debitado,
+        saldo_apos: saldoTotal(),
+        detalhe:
+          debito.debitado < pedido
+            ? `${detalhe} (parcial — resto quando houver saldo)`
+            : detalhe,
+      })
+    }
+    const falta = pedido - debito.debitado
+    if (falta > 0.009) {
+      devolucoesEmFila.push({ id: `${id}-resto`, detalhe, restante: falta })
+    }
+  }
+
+  const drenarFilaDevolucoes = (data: string) => {
+    if (saldoTotal() <= 0 || devolucoesEmFila.length === 0) return
+    const fila = [...devolucoesEmFila]
+    devolucoesEmFila.length = 0
+    for (const item of fila) {
+      tentarDevolucao(item.id, data, item.restante, item.detalhe)
+    }
+  }
+
+  for (const ev of montarEventosPool(
+    veiculos,
+    vendas,
+    despesasRevenda,
+    caixaCfg.devolucoes,
+  )) {
+
+    if (ev.tipo === 'devolucao') {
+      tentarDevolucao(
+        ev.devolucao.id,
+        ev.data,
+        Number(ev.devolucao.valor) || 0,
+        ev.devolucao.detalhe,
+      )
+      continue
+    }
 
     if (ev.tipo === 'despesa_revenda') {
 
       const valor = Number(ev.despesa.valor) || 0
 
-      if (valor > 0) saldoRevenda -= valor
+      if (valor > 0) {
+        saldoRevenda -= valor
+        registrarRevenda({
+          id: `despesa-rev-${ev.despesa.id}`,
+          data: ev.data,
+          tipo: 'despesa',
+          valor: -valor,
+          detalhe: ev.despesa.descricao || 'Despesa paga pelo caixa da loja',
+        })
+      }
 
       continue
 
@@ -640,41 +1408,54 @@ export function simularPoolPessoal(
 
       const valorVenda = Number(ev.venda.valor_venda) || 0
 
-      const fracao = fracaoMaicon(ev.veiculo.tipo_propriedade)
+      if (valorVenda <= 0) continue
 
-      const credito = fracao * valorVenda
+      const { creditoPool, creditoRevenda, detalhe } = distribuirVendaPool(
+        ev.veiculo,
+        valorVenda,
+        fundingPorVeiculo.get(ev.veiculo.id),
+      )
 
-      if (valorVenda > 0) saldoRevenda += valorVenda
+      if (creditoRevenda > 0) {
+        saldoRevenda += creditoRevenda
+        registrarRevenda({
+          id: `venda-rev-${ev.venda.id}`,
+          data: ev.data,
+          tipo: 'venda',
+          veiculo_id: ev.veiculo.id,
+          carro_nome: nomeVeiculo(ev.veiculo),
+          valor: creditoRevenda,
+          detalhe,
+        })
+      }
 
-      if (credito <= 0) continue
+      if (creditoPool > 0) {
+        saldoReinvestimento += creditoPool
+        totalReinvestido += creditoPool
 
+        movimentacoes.push({
 
+          id: `venda-${ev.venda.id}`,
 
-      saldoReinvestimento += credito
+          data: ev.data,
 
-      totalReinvestido += credito
+          tipo: 'venda',
 
+          veiculo_id: ev.veiculo.id,
 
+          carro_nome: nomeVeiculo(ev.veiculo),
 
-      movimentacoes.push({
+          valor: creditoPool,
 
-        id: `venda-${ev.venda.id}`,
+          saldo_apos: saldoTotal(),
 
-        data: ev.data,
+          detalhe,
 
-        tipo: 'venda',
+        })
 
-        veiculo_id: ev.veiculo.id,
-
-        carro_nome: nomeVeiculo(ev.veiculo),
-
-        valor: credito,
-
-        saldo_apos: saldoTotal(),
-
-        detalhe: `Venda ${nomeVeiculo(ev.veiculo)} — sua parte (${fracao === 1 ? '100%' : '50%'}) volta ao pool`,
-
-      })
+        // Devoluções que faltaram quando o caixa estava zerado
+        drenarFilaDevolucoes(ev.data)
+      }
 
       continue
 
@@ -683,8 +1464,6 @@ export function simularPoolPessoal(
 
 
     const v = ev.veiculo
-
-    const fracao = fracaoMaicon(v.tipo_propriedade)
 
     const valorCompra = Number(v.valor_compra) || 0
 
@@ -702,69 +1481,122 @@ export function simularPoolPessoal(
 
     let doReinvest: number
 
+    let aporteNaCompra = 0
+
 
 
     if (veiculoTemFundingManual(v)) {
 
       doRevendaTotal = Math.max(0, Number(v.compra_funding_revenda) || 0)
 
-      doInvestimento = Math.max(0, Number(v.compra_funding_investimento) || 0)
-
       doBolso = pessoalMeuNaCompra(v)
 
+      const aporteRevenda = aporteInvestimentoParaRevenda(v)
+      aporteNaCompra = aporteRevenda
+      const investimentoPool =
+        aporteRevenda > 0
+          ? aporteRevenda
+          : investimentoPoolDiretoNaCompra(v)
+
+      if (aporteRevenda > 0) {
+        const poolAporte = aplicarInvestimentoPool(
+          aporteRevenda,
+          saldoCapitalInicial,
+          saldoReinvestimento,
+        )
+        doCapital = poolAporte.doCapital
+        doReinvest = poolAporte.doReinvest
+        saldoCapitalInicial = poolAporte.saldoCapitalInicial
+        saldoReinvestimento = poolAporte.saldoReinvestimento
+        const faltaAporte = dinheiro(
+          Math.max(0, aporteRevenda - doCapital - doReinvest),
+        )
+        if (faltaAporte >= 0.5) {
+          doBolso = dinheiro(doBolso + faltaAporte)
+        }
+        doInvestimento = dinheiro(doCapital + doReinvest)
+        saldoRevenda += aporteRevenda
+        registrarRevenda({
+          id: `aporte-rev-${v.id}`,
+          data: v.data_compra,
+          tipo: 'aporte',
+          veiculo_id: v.id,
+          carro_nome: nomeVeiculo(v),
+          valor: aporteRevenda,
+          detalhe: `Aporte seu — ${formatarMoedaCurta(aporteRevenda)} do caixa investimento → caixa revenda (giro a meia)`,
+        })
+        movimentacoes.push({
+          id: `aporte-rev-pool-${v.id}`,
+          data: v.data_compra,
+          tipo: 'aporte_revenda',
+          veiculo_id: v.id,
+          carro_nome: nomeVeiculo(v),
+          valor: -doInvestimento,
+          saldo_apos: saldoTotal(),
+          detalhe: `Aporte na revenda — ${formatarMoedaCurta(doInvestimento)} saiu do seu caixa investimento`,
+        })
+      } else {
+        const pool = aplicarInvestimentoPool(
+          investimentoPool,
+          saldoCapitalInicial,
+          saldoReinvestimento,
+        )
+        doCapital = pool.doCapital
+        doReinvest = pool.doReinvest
+        const faltaInvestimento = dinheiro(
+          Math.max(0, investimentoPool - doCapital - doReinvest),
+        )
+        if (faltaInvestimento >= 0.5) {
+          doBolso = dinheiro(doBolso + faltaInvestimento)
+        }
+        doInvestimento = dinheiro(doCapital + doReinvest)
+        saldoCapitalInicial = pool.saldoCapitalInicial
+        saldoReinvestimento = pool.saldoReinvestimento
+      }
+
+      const aporteSocio = aporteSocioExternoRevenda(v, valorCompra)
+      if (aporteSocio > 0) {
+        saldoRevenda += aporteSocio
+        registrarRevenda({
+          id: `aporte-socio-rev-${v.id}`,
+          data: v.data_compra,
+          tipo: 'aporte',
+          veiculo_id: v.id,
+          carro_nome: nomeVeiculo(v),
+          valor: aporteSocio,
+          detalhe: `Aporte novo na empresa — ${formatarMoedaCurta(aporteSocio)} (parte do sócio na compra do ${nomeVeiculo(v)})`,
+        })
+      }
+
+      // Aportes 50/50 cobriram a compra e o campo revenda ficou 0 → compra sai desse caixa novo
+      if (
+        doRevendaTotal <= 0 &&
+        aporteNaCompra > 0 &&
+        aporteSocio > 0 &&
+        dinheiro(aporteNaCompra + aporteSocio) + 0.01 >= valorCompra
+      ) {
+        doRevendaTotal = valorCompra
+      }
+
       saldoRevenda -= doRevendaTotal
-
-      const investimentoPool = investimentoPoolNaCompra(v)
-
-      const pool = aplicarInvestimentoPool(
-
-        investimentoPool,
-
-        saldoCapitalInicial,
-
-        saldoReinvestimento,
-
-      )
-
-      doCapital = pool.doCapital
-
-      doReinvest = pool.doReinvest
-
-      saldoCapitalInicial = pool.saldoCapitalInicial
-
-      saldoReinvestimento = pool.saldoReinvestimento
 
     } else {
 
-      doRevendaTotal = Math.min(valorCompra, saldoRevenda)
-
-      saldoRevenda -= doRevendaTotal
-
-
-
-      const minhaParteCompra = fracao * valorCompra
-
-      const doRevendaMaicon = valorCompra > 0 ? doRevendaTotal * fracao : 0
-
-      const debitoPool = Math.max(0, minhaParteCompra - doRevendaMaicon)
-
-
-
-      doCapital = Math.min(debitoPool, saldoCapitalInicial)
-
-      const restante = debitoPool - doCapital
-
-      doReinvest = Math.min(restante, saldoReinvestimento)
-
-      doBolso = restante - doReinvest
-
-      doInvestimento = doCapital + doReinvest
-
-
-
-      saldoCapitalInicial -= doCapital
-
-      saldoReinvestimento -= doReinvest
+      const auto = fundingAutomaticoCompra(
+        valorCompra,
+        v.tipo_propriedade,
+        saldoRevenda,
+        saldoCapitalInicial,
+        saldoReinvestimento,
+      )
+      doRevendaTotal = auto.doRevendaTotal
+      doCapital = auto.doCapital
+      doReinvest = auto.doReinvest
+      doBolso = auto.doBolso
+      doInvestimento = auto.doInvestimento
+      saldoRevenda = auto.saldoRevenda
+      saldoCapitalInicial = auto.saldoCapitalInicial
+      saldoReinvestimento = auto.saldoReinvestimento
 
     }
 
@@ -828,7 +1660,13 @@ export function simularPoolPessoal(
 
       const socioInv = investimentoSocioNaCompra(v)
 
-      if (socioInv > 0) {
+      if (aporteNaCompra > 0) {
+        const aporteSocio = aporteSocioExternoRevenda(v, valorCompra)
+        const aporteTotal = dinheiro(aporteNaCompra + aporteSocio)
+        partes.push(
+          `${formatarMoedaCurta(aporteTotal)} aporte novo na empresa (${formatarMoedaCurta(aporteNaCompra)} seu investimento${aporteSocio > 0 ? ` + ${formatarMoedaCurta(aporteSocio)} sócio` : ''})`,
+        )
+      } else if (socioInv > 0) {
 
         partes.push(
 
@@ -863,29 +1701,67 @@ export function simularPoolPessoal(
 
 
 
-    movimentacoes.push({
+    const debitoPoolExtrato =
+      aporteNaCompra > 0 ? 0 : doCapital + doReinvest
 
-      id: `compra-${v.id}`,
+    if (doRevendaTotal > 0) {
+      const aporteNovoCompra =
+        aporteNaCompra > 0 &&
+        aporteSocioExternoRevenda(v, valorCompra) > 0
+      registrarRevenda({
+        id: `compra-rev-${v.id}`,
+        data: v.data_compra,
+        tipo: 'compra',
+        veiculo_id: v.id,
+        carro_nome: nomeVeiculo(v),
+        valor: -doRevendaTotal,
+        detalhe: aporteNovoCompra
+          ? `Compra ${nomeVeiculo(v)} — ${formatarMoedaCurta(doRevendaTotal)} (aporte novo de ${formatarMoedaCurta(valorCompra)} na empresa; em caixa mantém o saldo anterior)`
+          : `Compra ${nomeVeiculo(v)} — ${formatarMoedaCurta(doRevendaTotal)} do caixa revenda (reenvestimento)`,
+      })
+    }
 
-      data: v.data_compra,
+    if (debitoPoolExtrato > 0) {
+      movimentacoes.push({
 
-      tipo: 'compra',
+        id: `compra-${v.id}`,
 
-      veiculo_id: v.id,
+        data: v.data_compra,
 
-      carro_nome: nomeVeiculo(v),
+        tipo: 'compra',
 
-      valor: -(doRevendaTotal + doInvestimento + doBolso),
+        veiculo_id: v.id,
 
-      saldo_apos: saldoTotal(),
+        carro_nome: nomeVeiculo(v),
 
-      detalhe: `Compra ${nomeVeiculo(v)} — ${partes.join(', ') || 'sem origem identificada'}`,
+        valor: -debitoPoolExtrato,
 
-    })
+        saldo_apos: saldoTotal(),
+
+        detalhe: `Compra ${nomeVeiculo(v)} — ${partes.filter((p) => !p.includes('revenda')).join(', ') || partes.join(', ') || 'caixa investimento'}`,
+
+      })
+    }
+
+    if (doBolso > 0) {
+      movimentacoes.push({
+        id: `compra-bolso-${v.id}`,
+        data: v.data_compra,
+        tipo: 'compra',
+        veiculo_id: v.id,
+        carro_nome: nomeVeiculo(v),
+        valor: 0,
+        saldo_apos: saldoTotal(),
+        detalhe: `${formatarMoedaCurta(doBolso)} do bolso (a devolver — não debita o caixa até marcar devolvido)`,
+      })
+    }
 
   }
 
+  // Qualquer resto de devolução que ainda não coube
+  drenarFilaDevolucoes('')
 
+  const saldoInvestimentoBruto = saldoTotal() + totalDevolvidoAoBolso
 
   return {
 
@@ -904,6 +1780,12 @@ export function simularPoolPessoal(
     totalReinvestido,
 
     saldoRevendaFinal: saldoRevenda,
+
+    saldoInvestimentoBruto,
+
+    totalDevolvidoAoBolso,
+
+    movimentacoesRevenda,
 
   }
 
@@ -1017,8 +1899,22 @@ export interface ResumoBancoPessoal {
 
   minhaParteEstoque: number
 
-  /** Saldo livre no pool (capital inicial restante + reinvestimentos). */
+  /**
+   * Disponível para comprar: saldo do extrato menos despesas pessoais ainda
+   * pendentes em "A devolver" (ex.: gasolina) — essas reservam o pool até marcar.
+   */
+  caixaInvestimento: number
 
+  /** Saldo técnico no extrato (antes de reservar pendências). */
+  caixaInvestimentoExtrato: number
+
+  /** Parte do extrato comprometida com despesas a devolver. */
+  caixaInvestimentoReservado: number
+
+  /** Extrato + já devolvido ao bolso (não é “quanto devolveu”). */
+  caixaInvestimentoBruto: number
+
+  /** @deprecated Use caixaInvestimento */
   capitalDisponivel: number
 
   saldoCapitalInicial: number
@@ -1037,20 +1933,163 @@ export interface ResumoBancoPessoal {
 
   totalDevolvido: number
 
+  /** Valor efetivamente debitado do caixa investimento (pode ser menor se faltou saldo). */
+  totalDevolvidoDebitado: number
+
   lucroRealizadoMeu: number
 
   qtdCarros: number
   qtdVendidos: number
-  /** Caixa livre no pool pessoal (= capitalDisponivel). */
+  /** @deprecated Use caixaInvestimento */
   caixaPool: number
-  /** Caixa livre da loja — 100% (seu + sócios). */
+  /** Caixa revenda compartilhado — 100% loja (seu + sócios). */
   caixaRevenda: number
-  /** Caixa + sua parte em estoque — patrimônio pessoal no negócio. */
+  /** Sua metade do caixa revenda (50%). */
+  minhaParteRevenda: number
+  /** Sua parte no valor FIPE dos carros ainda não vendidos. */
+  valorFipeEstoqueMeu: number
+  /** Caixa investimento + 50% revenda + FIPE estoque (sua parte). */
   patrimonioTotal: number
   /** Patrimônio acima do capital inicial (crescimento dos giros). */
   crescimentoPatrimonio: number
   /** Quanto do capital inicial de R$ 38 mil ainda está líquido no pool. */
   capitalInicialLivre: number
+}
+
+export interface CarroPatrimonioFipe {
+  veiculo_id: string
+  nome: string
+  placa: string
+  valorFipe: number
+  minhaParte: number
+  fracao: number
+}
+
+/** FIPE dos carros em estoque — só os que ainda não foram vendidos. */
+export function patrimonioFipeEstoque(
+  veiculos: Veiculo[],
+  vendas: Venda[] = [],
+): { totalMeu: number; carros: CarroPatrimonioFipe[] } {
+  const vendidos = new Set(vendas.map((v) => v.veiculo_id))
+  const carros: CarroPatrimonioFipe[] = []
+  let totalMeu = 0
+
+  for (const v of veiculos) {
+    if (vendidos.has(v.id) || v.status === 'vendido') continue
+    const fipe = Number(v.valor_fipe) || 0
+    if (fipe <= 0) continue
+    const fracao = fracaoMaicon(v.tipo_propriedade)
+    const minhaParte = fipe * fracao
+    totalMeu += minhaParte
+    carros.push({
+      veiculo_id: v.id,
+      nome: nomeVeiculo(v),
+      placa: v.placa,
+      valorFipe: fipe,
+      minhaParte,
+      fracao,
+    })
+  }
+
+  carros.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  return { totalMeu, carros }
+}
+
+export interface ResumoPatrimonioCard {
+  total: number
+  caixaInvestimento: number
+  minhaParteRevenda: number
+  valorFipeEstoqueMeu: number
+  caixaRevendaTotal: number
+  saldoCapitalInicial: number
+  saldoReinvestimento: number
+  capitalInicial: number
+  crescimento: number
+  nomeDono: string
+  carrosFipe: CarroPatrimonioFipe[]
+  todosCarrosFipe: CarroPatrimonioFipe[]
+  modoCompactoFipe: boolean
+  qtdCarrosFipe: number
+  /** Itens que compõem o patrimônio. */
+  composicao: Array<{
+    id: string
+    rotulo: string
+    valor: number
+    detalhe: string
+  }>
+}
+
+export function resumoPatrimonioCard(
+  r: Pick<
+    ResumoBancoPessoal,
+    | 'patrimonioTotal'
+    | 'caixaInvestimento'
+    | 'minhaParteRevenda'
+    | 'valorFipeEstoqueMeu'
+    | 'caixaRevenda'
+    | 'saldoCapitalInicial'
+    | 'saldoReinvestimento'
+    | 'crescimentoPatrimonio'
+    | 'capitalInicial'
+  >,
+  socios: string[],
+  veiculos: Veiculo[],
+  vendas: Venda[] = [],
+): ResumoPatrimonioCard {
+  const nomeDono =
+    primeiroNomeSocio(normalizarListaSocios(socios)[0]) ||
+    normalizarListaSocios(socios)[0]
+
+  const fipe = patrimonioFipeEstoque(veiculos, vendas)
+  const valorFipe = r.valorFipeEstoqueMeu
+
+  const composicao: ResumoPatrimonioCard['composicao'] = [
+    {
+      id: 'investimento',
+      rotulo: 'Caixa investimento',
+      valor: r.caixaInvestimento,
+      detalhe:
+        r.saldoCapitalInicial > 0 || r.saldoReinvestimento > 0
+          ? `Capital ${formatarMoedaCurta(r.saldoCapitalInicial)} + vendas ${formatarMoedaCurta(r.saldoReinvestimento)}`
+          : 'Capital + vendas seus (100%)',
+    },
+    {
+      id: 'revenda-metade',
+      rotulo: '50% caixa revenda',
+      valor: r.minhaParteRevenda,
+      detalhe: `Sua metade de ${formatarMoedaCurta(r.caixaRevenda)} no giro a meia`,
+    },
+  ]
+
+  if (valorFipe > 0) {
+    composicao.push({
+      id: 'fipe-estoque',
+      rotulo: 'Carros em estoque (FIPE)',
+      valor: valorFipe,
+      detalhe: `${fipe.carros.length} ${fipe.carros.length === 1 ? 'carro' : 'carros'} não vendidos · sua parte`,
+    })
+  }
+
+  const qtdCarrosFipe = fipe.carros.length
+  const modoCompactoFipe = qtdCarrosFipe > LIMITE_CARROS_MINI_RELATORIO
+
+  return {
+    total: r.patrimonioTotal,
+    caixaInvestimento: r.caixaInvestimento,
+    minhaParteRevenda: r.minhaParteRevenda,
+    valorFipeEstoqueMeu: valorFipe,
+    caixaRevendaTotal: r.caixaRevenda,
+    saldoCapitalInicial: r.saldoCapitalInicial,
+    saldoReinvestimento: r.saldoReinvestimento,
+    capitalInicial: r.capitalInicial,
+    crescimento: r.crescimentoPatrimonio,
+    nomeDono,
+    carrosFipe: modoCompactoFipe ? [] : fipe.carros,
+    todosCarrosFipe: fipe.carros,
+    modoCompactoFipe,
+    qtdCarrosFipe,
+    composicao,
+  }
 }
 
 
@@ -1069,14 +2108,18 @@ export function resumoBancoPessoal(
 
   opcoesCaixa?: OpcoesSimulacaoCaixa,
 
+  simPreCalculada?: SimulacaoPoolPessoal,
+
 ): ResumoBancoPessoal {
 
-  const sim = simularPoolPessoal(
-    veiculos,
-    vendas,
-    capitalInicial,
-    opcoesCaixa,
-  )
+  const sim =
+    simPreCalculada ??
+    simularPoolPessoal(
+      veiculos,
+      vendas,
+      capitalInicial,
+      opcoesCaixa,
+    )
 
 
 
@@ -1085,6 +2128,14 @@ export function resumoBancoPessoal(
     capitalInicial,
 
     minhaParteEstoque: 0,
+
+    caixaInvestimento: sim.saldoFinal,
+
+    caixaInvestimentoExtrato: sim.saldoFinal,
+
+    caixaInvestimentoReservado: 0,
+
+    caixaInvestimentoBruto: sim.saldoInvestimentoBruto,
 
     capitalDisponivel: sim.saldoFinal,
 
@@ -1104,12 +2155,16 @@ export function resumoBancoPessoal(
 
     totalDevolvido: 0,
 
+    totalDevolvidoDebitado: sim.totalDevolvidoAoBolso,
+
     lucroRealizadoMeu: 0,
 
     qtdCarros: carros.length,
     qtdVendidos: 0,
     caixaPool: 0,
     caixaRevenda: sim.saldoRevendaFinal,
+    minhaParteRevenda: 0,
+    valorFipeEstoqueMeu: 0,
     patrimonioTotal: 0,
     crescimentoPatrimonio: 0,
     capitalInicialLivre: sim.saldoCapitalInicial,
@@ -1153,30 +2208,198 @@ export function resumoBancoPessoal(
 
 
 
+  let despesasPendentes = 0
   for (const l of lancamentos) {
-
     const valor = Number(l.valor) || 0
-
-    if (l.status === 'a_devolver') r.totalADevolver += valor
-
-    else r.totalDevolvido += valor
+    if (l.status === 'a_devolver') {
+      r.totalADevolver += valor
+      if (l.origem === 'despesa') despesasPendentes += valor
+    } else {
+      r.totalDevolvido += valor
+    }
   }
 
-  r.caixaPool = r.capitalDisponivel
-  r.patrimonioTotal = r.capitalDisponivel + r.minhaParteEstoque
+  const extratoLivre = dinheiro(sim.saldoFinal)
+  const reservado = dinheiro(Math.min(extratoLivre, despesasPendentes))
+  const disponivel = dinheiro(extratoLivre - reservado)
+
+  r.caixaInvestimentoExtrato = extratoLivre
+  r.caixaInvestimentoReservado = reservado
+  r.caixaInvestimento = disponivel
+  r.caixaPool = disponivel
+  r.capitalDisponivel = disponivel
+  r.minhaParteRevenda = r.caixaRevenda / 2
+  r.valorFipeEstoqueMeu = patrimonioFipeEstoque(veiculos, vendas).totalMeu
+  r.patrimonioTotal =
+    disponivel + r.minhaParteRevenda + r.valorFipeEstoqueMeu
   r.crescimentoPatrimonio = r.patrimonioTotal - r.capitalInicial
   r.capitalInicialLivre = sim.saldoCapitalInicial
 
   return r
 }
 
+export interface ItemInvestimentoEstoque {
+  veiculo_id: string
+  nome: string
+  placa: string
+  do_investimento: number
+}
 
+/** Separa disponível vs estoque vs reservas de despesas pendentes. */
+export interface VisaoCaixaInvestimentoCard {
+  /** Pode usar para comprar (extrato − reservas). */
+  disponivel: number
+  /** Saldo técnico no extrato. */
+  livre: number
+  /** Comprometido com despesas a devolver. */
+  reservado: number
+  itensEstoque: ItemInvestimentoEstoque[]
+  totalNoEstoque: number
+  devolvidoMarcado: number
+  devolvidoDebitadoCaixa: number
+  alertasPendentes: string[]
+}
+
+export function visaoCaixaInvestimentoCard(
+  resumo: ResumoBancoPessoal,
+  carros: CarroBancoPessoal[],
+  lancamentos: LancamentoBancoPessoal[],
+): VisaoCaixaInvestimentoCard {
+  const itensEstoque = carros
+    .filter(
+      (c) =>
+        c.status !== 'vendido' && dinheiro(Number(c.do_investimento) || 0) > 0,
+    )
+    .map((c) => ({
+      veiculo_id: c.veiculo_id,
+      nome: c.nome,
+      placa: c.placa,
+      do_investimento: dinheiro(Number(c.do_investimento) || 0),
+    }))
+    .sort((a, b) => b.do_investimento - a.do_investimento)
+
+  const totalNoEstoque = dinheiro(
+    itensEstoque.reduce((s, i) => s + i.do_investimento, 0),
+  )
+
+  const livre = dinheiro(resumo.caixaInvestimentoExtrato)
+  const reservado = dinheiro(resumo.caixaInvestimentoReservado)
+  const disponivel = dinheiro(resumo.caixaInvestimento)
+  const devolvidoMarcado = dinheiro(resumo.totalDevolvido)
+  const devolvidoDebitadoCaixa = dinheiro(resumo.totalDevolvidoDebitado)
+
+  const despesasPendentes = lancamentos.filter(
+    (l) => l.status === 'a_devolver' && l.origem === 'despesa',
+  )
+
+  const alertasPendentes: string[] = []
+
+  if (devolvidoDebitadoCaixa > 0) {
+    alertasPendentes.push(
+      `${formatarMoedaCurta(devolvidoDebitadoCaixa)} já devolvido ao bolso e debitado — fora disso ficam só pendências ainda não marcadas.`,
+    )
+  }
+
+  if (reservado > 0) {
+    alertasPendentes.push(
+      `${formatarMoedaCurta(reservado)} no extrato está reservado a despesas em A devolver (não conta como disponível para comprar).`,
+    )
+  }
+
+  for (const d of despesasPendentes) {
+    const valor = dinheiro(Number(d.valor) || 0)
+    if (valor <= 0) continue
+    const desc = d.descricao.trim()
+    const ehGasolinaAcordo = desc.toLowerCase().includes('gasolina acordo')
+    const explicaResiduo =
+      livre > 0 && livre < 500 && Math.abs(valor - livre) < 2
+    if (ehGasolinaAcordo || explicaResiduo) {
+      alertasPendentes.push(
+        `${formatarMoedaCurta(valor)} · ${desc} — pendente; não entra nos ${formatarMoedaCurta(devolvidoDebitadoCaixa)} já devolvidos.`,
+      )
+    }
+  }
+
+  if (disponivel <= 0 && totalNoEstoque > 0) {
+    alertasPendentes.push(
+      `Disponível para comprar: R$ 0. Investimento alocado nos carros: ${formatarMoedaCurta(totalNoEstoque)}.`,
+    )
+  }
+
+  return {
+    disponivel,
+    livre,
+    reservado,
+    itensEstoque,
+    totalNoEstoque,
+    devolvidoMarcado,
+    devolvidoDebitadoCaixa,
+    alertasPendentes,
+  }
+}
 
 // ---------------------------------------------------------------------------
 
 // Sincronização automática
 
 // ---------------------------------------------------------------------------
+
+export interface EstadoBancoPessoal {
+  lancamentos: LancamentoBancoPessoal[]
+  opcoesCaixa: OpcoesSimulacaoCaixa
+  sim: SimulacaoPoolPessoal
+  carros: CarroBancoPessoal[]
+  resumo: ResumoBancoPessoal
+}
+
+/** Uma simulação única — garante que resumo, extrato e carros usem os mesmos números. */
+export function montarEstadoBancoPessoal(
+  despesas: Despesa[],
+  veiculos: Veiculo[],
+  vendas: Venda[],
+  capitalInicial: number,
+  dono: string,
+  nomeRevenda: string,
+  socios: string[],
+): EstadoBancoPessoal {
+  const opcoesCaixaBase = { despesas, nomeRevenda, socios }
+  const lancamentos = lancamentosFromSistema(
+    despesas,
+    veiculos,
+    dono,
+    capitalInicial,
+    vendas,
+    opcoesCaixaBase,
+  )
+  const opcoesCaixa: OpcoesSimulacaoCaixa = {
+    ...opcoesCaixaBase,
+    devolucoes: devolucoesPoolFromLancamentos(lancamentos, vendas),
+  }
+  const sim = simularPoolPessoal(
+    veiculos,
+    vendas,
+    capitalInicial,
+    opcoesCaixa,
+  )
+  const carros = carrosFromSistema(
+    veiculos,
+    despesas,
+    vendas,
+    capitalInicial,
+    opcoesCaixa,
+    sim,
+  )
+  const resumo = resumoBancoPessoal(
+    carros,
+    lancamentos,
+    capitalInicial,
+    veiculos,
+    vendas,
+    opcoesCaixa,
+    sim,
+  )
+  return { lancamentos, opcoesCaixa, sim, carros, resumo }
+}
 
 
 
@@ -1264,12 +2487,16 @@ export function carrosFromSistema(
 
   opcoesCaixa?: Omit<OpcoesSimulacaoCaixa, 'despesas'>,
 
+  simPreCalculada?: SimulacaoPoolPessoal,
+
 ): CarroBancoPessoal[] {
 
-  const sim = simularPoolPessoal(veiculos, vendas, capitalInicial, {
-    despesas,
-    ...opcoesCaixa,
-  })
+  const sim =
+    simPreCalculada ??
+    simularPoolPessoal(veiculos, vendas, capitalInicial, {
+      despesas,
+      ...opcoesCaixa,
+    })
 
   const extrapPorVeic = new Map(
 
@@ -1315,21 +2542,33 @@ export function carrosFromSistema(
 
       minha_parte: 0,
 
-      extrapessoal_compra: funding?.do_bolso ?? extrapPorVeic.get(v.id) ?? 0,
+      extrapessoal_compra: (() => {
+        const simBolso = funding?.do_bolso ?? extrapPorVeic.get(v.id) ?? 0
+        if (!veiculoTemFundingManual(v)) return dinheiro(simBolso)
+        const cadBolso = pessoalMeuNaCompra(v)
+        return Math.abs(simBolso - cadBolso) < 0.5 ? cadBolso : dinheiro(simBolso)
+      })(),
 
       do_revenda: veiculoTemFundingManual(v)
         ? revendaMeuNaCompra(v)
         : (funding?.do_revenda ?? 0),
 
-      do_investimento: investimentoFunding(
-        funding ?? {
-          veiculo_id: v.id,
-          do_revenda: 0,
-          do_capital_inicial: 0,
-          do_reinvestimento: 0,
-          do_bolso: 0,
-        },
-      ),
+      do_investimento: (() => {
+        const simInv = investimentoFunding(
+          funding ?? {
+            veiculo_id: v.id,
+            do_revenda: 0,
+            do_capital_inicial: 0,
+            do_reinvestimento: 0,
+            do_bolso: 0,
+          },
+        )
+        if (!veiculoTemFundingManual(v)) return dinheiro(simInv)
+        const aporte = aporteInvestimentoParaRevenda(v)
+        if (aporte > 0) return aporte
+        const cadInv = investimentoPoolNaCompra(v)
+        return Math.abs(simInv - cadInv) < 0.5 ? cadInv : dinheiro(simInv)
+      })(),
 
       do_investimento_socio: veiculoTemFundingManual(v)
         ? investimentoSocioNaCompra(v)
@@ -1370,6 +2609,8 @@ export function lancamentosFromSistema(
   capitalInicial: number,
 
   vendas: Venda[] = [],
+
+  opcoesCaixa?: OpcoesSimulacaoCaixa,
 
 ): LancamentoBancoPessoal[] {
 
@@ -1415,7 +2656,12 @@ export function lancamentosFromSistema(
 
 
 
-  for (const e of simularPoolPessoal(veiculos, vendas, capitalInicial).extrapessoal) {
+  for (const e of simularPoolPessoal(
+    veiculos,
+    vendas,
+    capitalInicial,
+    opcoesCaixa,
+  ).extrapessoal) {
     lista.push({
       id: `compra-extra-${e.veiculo_id}`,
       origem: 'compra_extra',
