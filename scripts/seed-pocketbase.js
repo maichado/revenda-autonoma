@@ -1,13 +1,18 @@
 /**
- * Cria o usuário inicial do app no PocketBase via API Admin.
+ * Garante configuração padrão no PocketBase (sem criar usuários do app).
+ *
+ * Contas de login do aplicativo: use a aba "Criar conta" em http://localhost:5173
+ * (ou crie usuários no painel Admin — sem senhas neste repositório).
  *
  * Pré-requisitos:
  *   1. PocketBase rodando (scripts/start-pocketbase.ps1)
- *   2. Admin criado no primeiro `pocketbase serve`
+ *   2. Superuser criado no primeiro `pocketbase serve`
  *   3. Collections importadas (pocketbase/pb_schema.json)
+ *   4. PB_ADMIN_EMAIL / PB_ADMIN_PASSWORD no ambiente (.env.pb.local)
  *
  * Uso:
- *   PB_ADMIN_EMAIL=admin@example.com PB_ADMIN_PASSWORD=secret node scripts/seed-pocketbase.js
+ *   . .\scripts\load-pb-secrets.ps1
+ *   node scripts/seed-pocketbase.js
  */
 
 import {
@@ -25,72 +30,18 @@ const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL
 const ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD
 const TENANT_PRINCIPAL = 'rvd-autonoma-principal'
 
-const USUARIOS_INICIAIS = [
-  {
-    email: 'admin@revenda.local',
-    password: 'RevendaAutonoma2024!',
-    passwordConfirm: 'RevendaAutonoma2024!',
-    name: 'Administrador',
-  },
-  {
-    email: 'adminmaicon@revenda.local',
-    password: 'adminmaicon',
-    passwordConfirm: 'adminmaicon',
-    name: 'Maicon Machado',
-  },
-  {
-    email: 'cristiano@cristiano.com',
-    password: 'cristiano',
-    passwordConfirm: 'cristiano',
-    name: 'Cristiano',
-  },
-]
-
 async function authAdmin() {
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
     console.error(
-      'Defina PB_ADMIN_EMAIL e PB_ADMIN_PASSWORD (credenciais do superuser PocketBase).',
+      'Defina PB_ADMIN_EMAIL e PB_ADMIN_PASSWORD (superuser PocketBase em .env.pb.local).',
     )
     console.error(
-      'Exemplo: $env:PB_ADMIN_EMAIL="admin@email.com"; $env:PB_ADMIN_PASSWORD="senha"; node scripts/seed-pocketbase.js',
+      'Exemplo: . .\\scripts\\load-pb-secrets.ps1 ; node scripts/seed-pocketbase.js',
     )
     process.exit(1)
   }
 
   return authSuperuser(ADMIN_EMAIL, ADMIN_PASSWORD)
-}
-
-function isDuplicateUserError(status, err) {
-  if (status === 409) return true
-  if (status !== 400) return false
-  return err?.data?.email?.code === 'validation_not_unique'
-}
-
-async function criarUsuario(token, usersCollectionName, usuario) {
-  const res = await fetch(
-    `${PB_URL}/api/collections/${usersCollectionName}/records`,
-    {
-      method: 'POST',
-      headers: authHeaders(token),
-      body: JSON.stringify({
-        ...usuario,
-        emailVisibility: true,
-        tenant: usuario.tenant ?? TENANT_PRINCIPAL,
-      }),
-    },
-  )
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    if (isDuplicateUserError(res.status, err)) {
-      console.log(`  ↳ ${usuario.email} já existe — ignorado`)
-      return
-    }
-    const body = JSON.stringify(err)
-    throw new Error(`Falha ao criar ${usuario.email} (${res.status}): ${body}`)
-  }
-
-  console.log(`  ✓ ${usuario.email} criado`)
 }
 
 async function criarConfigPadrao(token) {
@@ -151,20 +102,13 @@ async function main() {
     )
   }
 
-  console.log('Admin autenticado. Criando usuários do app...')
-
-  for (const usuario of USUARIOS_INICIAIS) {
-    await criarUsuario(token, usersCollection.name, usuario)
-  }
-
-  console.log('Criando configurações padrão (sem dados de negócio)...')
+  console.log('Admin autenticado. Criando configurações padrão (sem usuários do app)...')
   await criarConfigPadrao(token)
 
   console.log('')
-  console.log('Concluído! Logins no app:')
-  console.log('  admin@revenda.local / RevendaAutonoma2024!')
-  console.log('  adminmaicon / adminmaicon')
-  console.log('  cristiano@cristiano.com / cristiano')
+  console.log('Concluído!')
+  console.log('  Conta do app: abra http://localhost:5173 → aba "Criar conta".')
+  console.log('  Superuser PB: painel http://127.0.0.1:8090/_/ (credenciais em .env.pb.local).')
 }
 
 main().catch((err) => {

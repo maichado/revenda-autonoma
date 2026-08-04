@@ -80,5 +80,5 @@ Write-Host 'Ou manualmente:' -ForegroundColor White
 Write-Host '  1. .\scripts\start-pocketbase.ps1' -ForegroundColor Gray
 Write-Host '  2. Crie o superuser admin em http://127.0.0.1:8090/_/ (se pb_data foi apagada)' -ForegroundColor Gray
 Write-Host '  3. .\scripts\setup-pocketbase.ps1' -ForegroundColor Gray
-Write-Host '  4. npm run dev  ->  login admin@revenda.local / RevendaAutonoma2024!' -ForegroundColor Gray
+Write-Host '  4. npm run dev  ->  aba Criar conta (seu e-mail e senha)' -ForegroundColor Gray
 Write-Host ''

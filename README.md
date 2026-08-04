@@ -142,13 +142,15 @@ Cada registro de negócio tem um campo `tenant`. Regras do PocketBase (`tenant =
 
 | Tipo de conta | Tenant | Dados |
 |---------------|--------|-------|
-| **Equipe principal** (seed: admin, adminmaicon, cristiano) | `rvd-autonoma-principal` | Compartilhados entre esses usuários |
-| **Conta nova** (Criar conta no login) | `id` do próprio usuário | Totalmente isolada — estoque vazio, config própria |
+| **Conta nova** (aba **Criar conta** no login) | `id` do próprio usuário | Isolada — estoque vazio e config própria |
+| **Equipe compartilhada** | Mesmo valor de `tenant` em todos os usuários (ex.: `rvd-autonoma-principal`) | Vários logins veem o mesmo estoque |
+
+Para trabalhar em equipe: no painel Admin do PocketBase, edite o campo `tenant` dos usuários para o **mesmo** valor. Contas criadas pelo app começam isoladas.
 
 **Regras de segurança em `users` (schema):**
 
 - Cadastro público **não pode** já enviar `tenant` preenchido (só vazio/omitido).
-- Depois que o `tenant` está definido, o usuário **não pode** alterá-lo via API (impede escalar para o tenant da equipe).
+- Depois que o `tenant` está definido, o usuário **não pode** alterá-lo via API (impede escalar para outro tenant).
 - No primeiro update (tenant vazio → valor), o app define `tenant = user.id` no registro.
 
 Contas legadas criadas antes do multi-tenant podem ser migradas com:
@@ -187,10 +189,10 @@ Use sempre os exemplos versionados:
 ```powershell
 copy .env.example .env
 copy .env.pb.local.example .env.pb.local
-# Edite .env.pb.local só na sua máquina
+# Edite .env.pb.local só na sua máquina (superuser do PocketBase — nunca commitado)
 ```
 
-> O script `seed-pocketbase.js` cria usuários **padrão de desenvolvimento**. Troque as senhas no painel admin após o primeiro acesso. Em produção, use senhas fortes e exclusivas.
+> **Nunca** versione e-mails ou senhas reais (nem de desenvolvimento). Contas do app são criadas por você na tela **Criar conta**; o superuser do PocketBase fica só em `.env.pb.local`.
 
 ---
 
@@ -228,7 +230,7 @@ copy .env.example .env
 copy .env.pb.local.example .env.pb.local
 ```
 
-Edite `.env.pb.local` com e-mail e senha do **superuser** PocketBase (admin do servidor).
+Edite `.env.pb.local` com o e-mail e a senha que **você** vai usar como **superuser** do PocketBase (admin do servidor). Esses valores ficam só na sua máquina.
 
 ### 4. Setup completo (primeira vez)
 
@@ -238,11 +240,11 @@ Edite `.env.pb.local` com e-mail e senha do **superuser** PocketBase (admin do s
 
 O script:
 
-1. Baixa `pocketbase.exe` na pasta irmã `rvd-autonoma-pb`
+1. Baixa `pocketbase.exe` na pasta irmã `rvd-autonoma-pb` (ou `gm-revenda-pb`)
 2. Inicia o servidor na porta **8090**
-3. Na **primeira vez**, abre o painel admin — **crie o superuser** (mesmo e-mail/senha do `.env.pb.local`)
+3. Na **primeira vez**, abre o painel admin — **crie o superuser** com o mesmo e-mail/senha que você colocou em `.env.pb.local`
 4. Importa o schema (`pb_schema.json`)
-5. Cria usuários iniciais e configurações padrão
+5. Garante configurações padrão do sistema (sem criar usuários do app)
 
 ### 5. Frontend (se não usou `-Dev`)
 
@@ -252,15 +254,16 @@ npm run dev
 
 Abra **http://localhost:5173**
 
-### 6. Primeiro login
+### 6. Criar sua conta no app
 
-| E-mail | Senha (dev) | Observação |
-|--------|-------------|------------|
-| `admin@revenda.local` | `RevendaAutonoma2024!` | Admin geral |
-| `adminmaicon@revenda.local` | `adminmaicon` | Tenant compartilhado da equipe |
-| `cristiano@cristiano.com` | `cristiano` | Tenant compartilhado da equipe |
+O sistema **não vem com login/senha prontos**. Com o PocketBase e o frontend rodando:
 
-Altere senhas em **Collections → users** no painel admin (`http://127.0.0.1:8090/_/`).
+1. Abra http://localhost:5173
+2. Na tela de login, use a aba **Criar conta**
+3. Informe nome, e-mail e senha **escolhidos por você**
+4. Entre e complete **Configurações** (nome da revenda, sócios, meta, capital, etc.)
+
+Painel Admin do PocketBase (schema, usuários, dados): http://127.0.0.1:8090/_/ — use apenas o superuser que você criou.
 
 ---
 
@@ -425,22 +428,30 @@ Faz backup de `pb_data` com timestamp antes de apagar.
 
 ## Usuários e login
 
-### Criar conta pelo app (recomendado para clientes novos)
+### Fluxo recomendado (primeira vez)
 
-1. Abra http://localhost:5173 (ou link ngrok)
-2. Aba **Criar conta** → nome, e-mail, senha
-3. A conta recebe tenant próprio — **não vê** dados da equipe principal
+1. **PocketBase rodando** (`.\scripts\start-pocketbase.ps1`)
+2. **Superuser criado** no painel `http://127.0.0.1:8090/_/` (credenciais só suas, em `.env.pb.local`)
+3. **Schema importado** (setup / `atualizar-schema.ps1` se necessário)
+4. **App rodando** (`npm run dev` → http://localhost:5173)
+5. **Criar conta** na tela de login → depois configure a revenda em **Configurações**
 
-### Usuário da equipe (admin PocketBase)
+### Criar conta pelo app
+
+1. Abra http://localhost:5173 (ou o link do túnel remoto)
+2. Aba **Criar conta** → nome, e-mail e senha definidos por você
+3. A conta recebe tenant próprio (dados isolados até você alterar o `tenant` no Admin, se for trabalhar em equipe)
+
+### Conta adicional pela Admin do PocketBase
 
 1. PocketBase rodando → http://127.0.0.1:8090/_/
-2. Login com **superuser** (`.env.pb.local`)
+2. Entre com o **superuser** (valores do seu `.env.pb.local`)
 3. **Collections** → **users** → **New record**
-4. Preencha e-mail, senha, nome; defina `tenant = rvd-autonoma-principal` para compartilhar dados da equipe
+4. Preencha e-mail, senha e nome; para compartilhar o estoque da equipe, use o **mesmo** `tenant` nos usuários desejados
 
 ### Sócios vs usuários de login
 
-**Sócios** (nomes em relatórios e divisão de lucro) são editados em **Configurações** dentro do app — não confundir com login do PocketBase.
+**Sócios** (nomes em relatórios e divisão de lucro) são editados em **Configurações** dentro do app — não confundir com login do PocketBase nem com o superuser do servidor.
 
 ---
 
@@ -450,12 +461,12 @@ Faz backup de `pb_data` com timestamp antes de apagar.
 |------------------|--------|
 | `iniciar-rvd-autonoma.ps1` | Setup completo + inicia PB (`-Dev`, `-Reset`) |
 | `start-pocketbase.ps1` | Só o servidor PocketBase |
-| `setup-pocketbase.ps1` | Schema + usuários seed |
+| `setup-pocketbase.ps1` | Schema + config padrão (sem criar logins do app) |
 | `atualizar-schema.ps1` | Reimporta `pb_schema.json` |
 | `reset-pocketbase.ps1` | Apaga dados (com confirmação) |
 | `iniciar-dev-ngrok.ps1` / `npm run dev:ngrok` | Túnel ngrok + Vite com proxy |
 | `migrar-tenant.js` | Migra dados legados para tenant principal |
-| `seed-pocketbase.js` | Usuários + config inicial |
+| `seed-pocketbase.js` | Configuração padrão inicial (conta do app: use **Criar conta**) |
 | `npm run start:dev` | Atalho: PB + Vite dev |
 | `npm run lint` | Typecheck TypeScript (`tsc -b --noEmit`) |
 | `validar-cenario-*.mts` | Validação de cenários financeiros (domínio) |

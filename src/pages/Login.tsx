@@ -241,9 +241,7 @@ export default function Login() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={
-                    cadastro ? 'seu@email.com' : 'adminmaicon'
-                  }
+                  placeholder="seu@email.com"
                   className="input pl-10"
                 />
               </div>

@@ -1,13 +1,17 @@
-# Conta registros nas collections do app via API REST (requer login).
+# Conta registros nas collections do app via API REST (requer login do app).
 #
 # Uso:
+#   $env:PB_APP_EMAIL = 'seu@email.com'
+#   $env:PB_APP_PASSWORD = 'sua-senha'
 #   .\scripts\verify-pocketbase-records.ps1
-#   .\scripts\verify-pocketbase-records.ps1 -Email "admin@revenda.local" -Password "RevendaAutonoma2024!"
+#
+# Ou:
+#   .\scripts\verify-pocketbase-records.ps1 -Email 'seu@email.com' -Password 'sua-senha'
 
 param(
   [string]$PbUrl = 'http://127.0.0.1:8090',
-  [string]$Email = 'admin@revenda.local',
-  [string]$Password = 'RevendaAutonoma2024!'
+  [string]$Email = $env:PB_APP_EMAIL,
+  [string]$Password = $env:PB_APP_PASSWORD
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,6 +20,13 @@ Write-Host ''
 Write-Host '=== RVD Autônoma - Verificar records PocketBase ===' -ForegroundColor Cyan
 Write-Host "URL: $PbUrl" -ForegroundColor Gray
 Write-Host ''
+
+if (-not $Email -or -not $Password) {
+  Write-Host 'Informe credenciais da conta do APP (não do superuser):' -ForegroundColor Red
+  Write-Host '  -Email / -Password  ou  $env:PB_APP_EMAIL / $env:PB_APP_PASSWORD' -ForegroundColor Gray
+  Write-Host 'Crie a conta em http://localhost:5173 → Criar conta' -ForegroundColor Gray
+  exit 1
+}
 
 try {
   Invoke-RestMethod -Uri "$PbUrl/api/health" -TimeoutSec 5 | Out-Null
@@ -29,7 +40,7 @@ try {
   $auth = Invoke-RestMethod -Method Post -Uri "$PbUrl/api/collections/users/auth-with-password" `
     -ContentType 'application/json' -Body $authBody
 } catch {
-  Write-Host "Falha no login ($Email). Ajuste -Email/-Password ou rode setup-pocketbase.ps1" -ForegroundColor Red
+  Write-Host 'Falha no login da conta do app. Confira -Email/-Password ou crie a conta no app.' -ForegroundColor Red
   exit 1
 }
 
@@ -39,12 +50,12 @@ $headers = @{ Authorization = $token }
 $collections = @('veiculos', 'compras', 'vendas', 'despesas', 'configuracoes')
 
 foreach ($col in $collections) {
-  $res = Invoke-RestMethod -Uri "$PbUrl/api/collections/$col/records?perPage=1&page=1" -Headers $headers
-  $total = $res.totalItems
-  $cor = if ($total -gt 0) { 'Green' } else { 'Yellow' }
-  Write-Host ("{0,-16} {1,5} registro(s)" -f $col, $total) -ForegroundColor $cor
+  try {
+    $res = Invoke-RestMethod -Uri "$PbUrl/api/collections/$col/records?perPage=1" -Headers $headers
+    Write-Host ("  {0,-16} total={1}" -f $col, $res.totalItems) -ForegroundColor White
+  } catch {
+    Write-Host ("  {0,-16} ERRO: {1}" -f $col, $_.Exception.Message) -ForegroundColor Red
+  }
 }
 
-Write-Host ''
-Write-Host "Admin UI: $PbUrl/_/" -ForegroundColor White
 Write-Host ''

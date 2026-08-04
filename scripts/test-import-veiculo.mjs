@@ -4,8 +4,15 @@
  */
 import { authSuperuser, PB_URL, authHeaders } from './lib/pb-admin.js'
 
-const EMAIL = process.env.PB_APP_EMAIL || 'admin@revenda.local'
-const PASSWORD = process.env.PB_APP_PASSWORD || 'RevendaAutonoma2024!'
+const EMAIL = process.env.PB_APP_EMAIL
+const PASSWORD = process.env.PB_APP_PASSWORD
+
+if (!EMAIL || !PASSWORD) {
+  console.error(
+    'Defina PB_APP_EMAIL e PB_APP_PASSWORD (conta criada no app — sem defaults no repo).',
+  )
+  process.exit(1)
+}
 
 // ~2.5MB base64 payload (excede maxSize 2000000 do campo fotos)
 const FOTO_GRANDE = 'data:image/jpeg;base64,' + 'A'.repeat(2_500_000)

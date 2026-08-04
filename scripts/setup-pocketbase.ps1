@@ -50,17 +50,15 @@ node (Join-Path $PSScriptRoot 'import-schema.js')
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ''
-Write-Host '[2/2] Criando usuarios do app (collection users)...' -ForegroundColor Cyan
+Write-Host '[2/2] Configuracao padrao (sem criar usuarios do app)...' -ForegroundColor Cyan
 node (Join-Path $PSScriptRoot 'seed-pocketbase.js')
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ''
 Write-Host 'Setup concluido!' -ForegroundColor Green
 Write-Host ''
-Write-Host 'Login no app:' -ForegroundColor White
-Write-Host '  admin@revenda.local / RevendaAutonoma2024!' -ForegroundColor Gray
-Write-Host '  adminmaicon / adminmaicon' -ForegroundColor Gray
-Write-Host '  cristiano@cristiano.com / cristiano' -ForegroundColor Gray
-Write-Host ''
-Write-Host 'Inicie o frontend: npm run dev' -ForegroundColor White
+Write-Host 'Proximos passos:' -ForegroundColor White
+Write-Host '  1. npm run dev' -ForegroundColor Gray
+Write-Host '  2. http://localhost:5173 → aba Criar conta (seu e-mail e senha)' -ForegroundColor Gray
+Write-Host '  3. Complete Configuracoes no app' -ForegroundColor Gray
 Write-Host ''

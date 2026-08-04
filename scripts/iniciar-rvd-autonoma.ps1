@@ -138,36 +138,23 @@ if (Test-PbHealth) {
     Write-Host '  PocketBase online.' -ForegroundColor Green
 }
 
-Write-Host '[3/5] Schema + usuario app...' -ForegroundColor Cyan
+Write-Host '[3/5] Schema + config padrao...' -ForegroundColor Cyan
 Invoke-SchemaUpdate
 
-$precisaSeed = $false
-if ($Reset -or -not (Test-Path $PbData)) { $precisaSeed = $true }
-else {
-    try {
-        $authBody = @{ identity = 'admin@revenda.local'; password = 'RevendaAutonoma2024!' } | ConvertTo-Json
-        $auth = Invoke-RestMethod -Method Post `
-            -Uri 'http://127.0.0.1:8090/api/collections/users/auth-with-password' `
-            -ContentType 'application/json' -Body $authBody -ErrorAction Stop
-        $headers = @{ Authorization = $auth.token }
-        Invoke-RestMethod -Uri 'http://127.0.0.1:8090/api/collections/veiculos/records?perPage=1' `
-            -Headers $headers -ErrorAction Stop | Out-Null
-    } catch { $precisaSeed = $true }
-}
-
-if ($precisaSeed) {
-    if (-not (Test-Path $PbData)) {
-        Write-Host '  Primeira vez: crie o admin em http://127.0.0.1:8090/_/' -ForegroundColor Yellow
-        Start-Process 'http://127.0.0.1:8090/_/'
-        Read-Host 'Pressione Enter apos criar o admin'
-    }
+$primeiraVez = $Reset -or -not (Test-Path $PbData)
+if ($primeiraVez) {
+    Write-Host '  Primeira vez: crie o superuser em http://127.0.0.1:8090/_/' -ForegroundColor Yellow
+    Write-Host '  Use o mesmo e-mail/senha do seu .env.pb.local' -ForegroundColor Yellow
+    Start-Process 'http://127.0.0.1:8090/_/'
+    Read-Host 'Pressione Enter apos criar o superuser'
     if ($env:PB_ADMIN_EMAIL) {
         Invoke-AppSetup
     } else {
         & (Join-Path $PSScriptRoot 'setup-pocketbase.ps1')
     }
 } else {
-    Write-Host '  Schema e login do app OK.' -ForegroundColor Green
+    # Repositório sem senhas de app: config/schema ja existem; conta via Criar conta no frontend.
+    Write-Host '  Schema OK. Conta do app: http://localhost:5173 → Criar conta' -ForegroundColor Green
 }
 
 Write-Host '[4/5] Build do frontend...' -ForegroundColor Cyan
@@ -187,9 +174,8 @@ Write-Host ''
 Write-Host '=== Pronto ===' -ForegroundColor Green
 Write-Host '  App:        http://localhost:5173' -ForegroundColor White
 Write-Host '  PocketBase: http://127.0.0.1:8090' -ForegroundColor White
-Write-Host '  Login app:  admin@revenda.local / RevendaAutonoma2024!' -ForegroundColor Gray
-Write-Host '              adminmaicon / adminmaicon' -ForegroundColor Gray
-Write-Host '              cristiano@cristiano.com / cristiano' -ForegroundColor Gray
+Write-Host '  Conta app:  http://localhost:5173 → aba Criar conta' -ForegroundColor Gray
+Write-Host '  Admin PB:   http://127.0.0.1:8090/_/ (superuser do .env.pb.local)' -ForegroundColor Gray
 Write-Host ''
 Write-Host 'Dados em:' -ForegroundColor Gray
 Write-Host "  $PbData" -ForegroundColor Gray

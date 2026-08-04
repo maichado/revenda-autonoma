@@ -75,7 +75,7 @@ Write-Host 'Link para o dev remoto (app + API via proxy):' -ForegroundColor Whit
 Write-Host "  $publicUrl" -ForegroundColor Green
 Write-Host ''
 Write-Host "Salvo em: ngrok-url.txt" -ForegroundColor Gray
-Write-Host 'Login: adminmaicon / adminmaicon (ou conta criada no sistema)' -ForegroundColor Gray
+Write-Host 'Conta do app: use Criar conta em http://localhost:5173 (sem senhas neste repo)' -ForegroundColor Gray
 Write-Host 'Inspector ngrok: http://127.0.0.1:4040' -ForegroundColor Gray
 Write-Host ''
 Write-Host 'Encerrando: Ctrl+C neste terminal e feche o ngrok se necessário.' -ForegroundColor DarkGray

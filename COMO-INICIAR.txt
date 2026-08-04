@@ -44,20 +44,25 @@ Este arquivo é um guia prático. Documentação completa: README.md
 
      Edite .env.pb.local com SEU e-mail e senha de admin do PocketBase.
 
-  5. Rode o setup completo (baixa PocketBase, schema, usuários seed):
+  5. Rode o setup completo (baixa PocketBase, schema, config padrão):
 
        .\scripts\iniciar-rvd-autonoma.ps1
 
      Na primeira execução o navegador abre o painel PocketBase.
-     Crie o superuser com o MESMO e-mail/senha do .env.pb.local
+     Crie o superuser com o MESMO e-mail/senha que você colocou no .env.pb.local
+     (essas credenciais são só suas — nunca vão para o Git).
 
   6. Se o frontend não abriu sozinho, em outro terminal:
 
        npm run dev
 
-  7. Acesse o app:
+  7. Acesse o app e CRIE SUA CONTA:
 
        http://localhost:5173
+       → aba "Criar conta" → nome, e-mail e senha escolhidos por você
+       → depois complete Configurações (nome da revenda, sócios, etc.)
+
+     O sistema NÃO traz login/senha prontos.
 
 
 --------------------------------------------------------------------------------
@@ -163,21 +168,24 @@ Este arquivo é um guia prático. Documentação completa: README.md
 
 
 --------------------------------------------------------------------------------
-  LOGINS DE DESENVOLVIMENTO (após seed)
+  CONTAS E LOGIN (sem senhas no repositório)
 --------------------------------------------------------------------------------
 
-  Contas da EQUIPE (dados compartilhados — tenant principal):
+  1) Superuser do PocketBase (admin do servidor):
+       - Criado por você na primeira abertura do painel
+       - Credenciais apenas em .env.pb.local (máquina local, gitignored)
+       - Painel: http://127.0.0.1:8090/_/
 
-    admin@revenda.local          /  RevendaAutonoma2024!
-    adminmaicon@revenda.local    /  adminmaicon
-    cristiano@cristiano.com      /  cristiano
+  2) Conta do aplicativo (login da revenda):
+       - Com PB + frontend rodando: http://localhost:5173
+       - Aba "Criar conta" → nome, e-mail e senha definidos por você
+       - Depois configure a revenda em Configurações
 
-  Conta NOVA pelo app:
-    Login → aba "Criar conta" → dados isolados (não vê estoque da equipe)
+  3) Equipe compartilhando o mesmo estoque:
+       - No Admin PB, defina o MESMO valor de "tenant" nos usuários desejados
+       - Contas novas pelo app começam isoladas (tenant = id do usuário)
 
-  Admin do servidor PocketBase (superuser):
-    Credenciais em .env.pb.local (só na sua máquina)
-    Painel: http://127.0.0.1:8090/_/
+  Nunca documente nem commit e-mails/senhas reais neste repositório.
 
 
 --------------------------------------------------------------------------------

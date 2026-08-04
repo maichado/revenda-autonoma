@@ -8,7 +8,7 @@ Escopo: `gm-revenda/` (React + Zustand + PocketBase). Data de referência: 2026-
 |------|------|-------|
 | Escalação de tenant via `users.update` | `pocketbase/pb_schema.json` | **Corrigido:** update não pode mudar `tenant` já definido; create não aceita tenant preenchido. Reimportar schema. |
 | Import wipe sem filtro de tenant no client | `src/lib/pbApi.ts` `importarParaPb` | **Corrigido:** usa `filtroTenant()`. Continua dependendo das API rules. |
-| Senhas seed fracas no repositório | `scripts/seed-pocketbase.js`, README | Trocar no admin após setup; não usar em túnel público sem rotação. |
+| Senhas seed no repositório | `scripts/seed-pocketbase.js`, README | **Corrigido:** seed não cria usuários do app; docs sem e-mail/senha; conta via **Criar conta**. |
 | Módulos “god” | `utils/bancoPessoal.ts` (~2800), `pages/BancoPessoal.tsx` (~1700) | Dividir em fases futuras (sem mudar regra de negócio). |
 | Sync update = getOne + full document | `pbApi.ts` sync*Update | Dobra RTT; risco de race em edição concorrente. |
 
