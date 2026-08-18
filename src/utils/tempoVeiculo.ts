@@ -6,7 +6,7 @@ import type { Veiculo, Venda } from '@/types'
 export interface MetricasTempoVeiculo {
   /** Compra até venda (ou hoje). */
   diasTotal: number
-  /** Compra até data do anúncio (ou hoje, se ainda em preparação). */
+  /** Compra até data do anúncio (ou hoje, se ainda em preparação/mecânico). */
   diasPreparacao: number
   /** Anúncio até venda (ou hoje); null se nunca anunciado. */
   diasAnunciado: number | null
@@ -40,7 +40,8 @@ export function calcularMetricasTempoVeiculo(
   const hoje = ref.toISOString().slice(0, 10)
   const fimTotal = venda?.data?.slice(0, 10) ?? hoje
   const diasTotal = diasEntre(veiculo.data_compra, fimTotal)
-  const emPreparacao = veiculo.status === 'em preparação'
+  const emPreparacao =
+    veiculo.status === 'em preparação' || veiculo.status === 'mecânico'
   const dataAnuncio = veiculo.data_anuncio?.slice(0, 10)
 
   if (emPreparacao && !dataAnuncio) {

@@ -17,6 +17,7 @@ import {
 import {
   ArrowDownRight,
   ArrowUpRight,
+  CalendarRange,
   Car,
   CheckCircle2,
   ChevronDown,
@@ -33,6 +34,7 @@ import {
 } from 'lucide-react'
 
 import { useStore } from '@/store/useStore'
+import type { Veiculo } from '@/types'
 import { NOME_REVENDA_PADRAO } from '@/constants/marca'
 import { KpiCard } from '@/components/KpiCard'
 import { EstoqueTempoCard } from '@/components/EstoqueTempoCard'
@@ -68,6 +70,7 @@ const COR_CUSTO = '#7E683E'
 const COR_LUCRO = '#22C55E'
 const CORES_STATUS: Record<string, string> = {
   'em preparação': '#A855F7',
+  'mecânico': '#F97316',
   'disponível': '#22C55E',
   reservado: '#F59E0B',
   vendido: '#0EA5E9',
@@ -191,6 +194,12 @@ export default function Dashboard() {
   const distEstoque = useMemo(() => distribuicaoEstoque(veiculos), [veiculos])
   const totalEstoqueGeral = distEstoque.reduce((acc, d) => acc + d.total, 0)
 
+  const veiculosPorId = useMemo(() => {
+    const map: Record<string, Veiculo> = {}
+    for (const v of veiculos) map[v.id] = v
+    return map
+  }, [veiculos])
+
   const linhasTempo = useMemo(
     () => linhasTempoVeiculos(veiculos, vendas, hoje),
     [veiculos, vendas, hoje],
@@ -206,6 +215,15 @@ export default function Dashboard() {
   const qtdAtivos = linhasAtivas.length
   const qtdVendidos = linhasVendidas.length
   const [vendidosAbertos, setVendidosAbertos] = useState(true)
+
+  /** Primeira data de compra cadastrada — marco de quando o negócio começou. */
+  const inicioNegocio = useMemo(() => {
+    const datas = veiculos
+      .map((v) => v.data_compra?.slice(0, 10))
+      .filter((d): d is string => !!d)
+    if (datas.length === 0) return null
+    return datas.sort()[0]
+  }, [veiculos])
 
   // ----- Movimentações recentes -----
   const ultimas = useMemo(
@@ -228,6 +246,18 @@ export default function Dashboard() {
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Visão geral do desempenho da {nomeRevenda || NOME_REVENDA_PADRAO} no mês corrente.
           </p>
+          {inicioNegocio && (
+            <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+              <CalendarRange size={13} className="shrink-0 text-primary" />
+              Negócio desde{' '}
+              <span className="tabular font-semibold text-zinc-700 dark:text-zinc-200">
+                {formatarDataCurta(inicioNegocio)}
+              </span>
+              <span className="text-zinc-400 dark:text-zinc-500">
+                (1ª compra cadastrada)
+              </span>
+            </p>
+          )}
         </div>
       </div>
 
@@ -251,6 +281,14 @@ export default function Dashboard() {
           valor={formatarMoeda(kpis.receitaAtual)}
           icone={<CircleDollarSign size={16} />}
           variacaoPercentual={kpis.varReceita}
+          detalhe={
+            <span
+              className="text-[11px] text-zinc-500 dark:text-zinc-400"
+              title="Só dinheiro das vendas. Bem recebido em troca só conta quando for vendido."
+            >
+              Dinheiro realizado (trocas no estoque à parte)
+            </span>
+          }
         />
         <KpiCard
           titulo="Lucro revenda (líq.)"
@@ -393,7 +431,7 @@ export default function Dashboard() {
                     </span>
                   </span>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Preparação · disponível · reservado
+                    Com data de compra · preparação · mecânico · disponível · reservado
                   </p>
                 </div>
               </div>
@@ -404,6 +442,9 @@ export default function Dashboard() {
                     veiculo={veiculo}
                     metricas={metricas}
                     venda={venda}
+                    veiculosPorId={veiculosPorId}
+                    vendas={vendas}
+                    despesas={despesas}
                     compact
                   />
                 ))}
@@ -431,7 +472,7 @@ export default function Dashboard() {
                     </span>
                   </span>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Histórico de negócios concluídos
+                    Histórico com compra, venda e trocas
                   </p>
                 </div>
                 <ChevronDown
@@ -450,6 +491,9 @@ export default function Dashboard() {
                       veiculo={veiculo}
                       metricas={metricas}
                       venda={venda}
+                      veiculosPorId={veiculosPorId}
+                      vendas={vendas}
+                      despesas={despesas}
                       compact
                     />
                   ))}

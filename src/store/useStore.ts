@@ -21,6 +21,7 @@ import type {
   SimulacaoNegocio,
   StatusVeiculo,
   Tema,
+  TrocaNaVendaInput,
   Veiculo,
   Venda,
 } from '@/types'
@@ -138,7 +139,12 @@ interface EstadoApp {
   // Vendas com integridade referencial com o veículo: adicionar marca o
   // veículo como "vendido"; excluir devolve o veículo para "disponível";
   // editar e trocar o veículo de uma venda re-equilibra ambos os status.
-  addVenda: (v: Venda) => Promise<void>
+  /**
+   * Registra a venda e marca o veículo como vendido.
+   * Se `troca` for informado, cadastra o bem recebido no estoque (com fotos),
+   * cria a compra de origem "troca" e liga à venda.
+   */
+  addVenda: (v: Venda, troca?: TrocaNaVendaInput) => Promise<void>
   updateVenda: (id: string, patch: Partial<Venda>) => Promise<void>
   deleteVenda: (id: string) => Promise<void>
 
@@ -578,26 +584,113 @@ export const useStore = create<EstadoApp>()(
       },
 
       // ------- Vendas -------
-      addVenda: async (venda) => {
+      addVenda: async (venda, troca) => {
         if (veiculoPossuiOutraVenda(get().vendas, venda.veiculo_id)) {
           throw new Error(
             'Este veículo já possui venda registrada. Edite ou exclua a venda existente.',
           )
         }
+
+        const vendido = get().veiculos.find((v) => v.id === venda.veiculo_id)
+        const placaVendido = vendido?.placa ?? '—'
+
+        let trocaVeiculo: Veiculo | null = null
+        let trocaCompra: Compra | null = null
+        let vendaFinal: Venda = { ...venda }
+
+        if (troca) {
+          const placa = troca.placa.trim().toUpperCase()
+          if (
+            get().veiculos.some(
+              (v) => v.placa.trim().toUpperCase() === placa,
+            )
+          ) {
+            throw new Error(
+              `Já existe um veículo com a placa ${placa} no estoque.`,
+            )
+          }
+
+          const obsTroca =
+            troca.observacoes?.trim() ||
+            `Entrada em troca na venda do veículo ${placaVendido}.`
+
+          const tipoProp = vendido?.tipo_propriedade ?? 'solo'
+          const socio = vendido?.socio_parceiro
+
+          trocaVeiculo = {
+            id: novoId(),
+            categoria: troca.categoria,
+            placa,
+            marca: troca.marca.trim(),
+            modelo: troca.modelo.trim(),
+            ano: troca.ano,
+            cor: troca.cor.trim(),
+            quilometragem: troca.quilometragem,
+            data_compra: venda.data,
+            valor_compra: troca.valor_avaliado,
+            valor_venda_pretendido: troca.valor_avaliado,
+            status: 'em preparação',
+            // Herda a meia/sócio do veículo vendido (ex.: Uno a meia → moto a meia).
+            tipo_propriedade: tipoProp,
+            socio_parceiro: tipoProp === 'meia' ? socio : undefined,
+            // Troca = ativo, sem funding de caixa (revenda/investimento/bolso).
+            compra_funding_manual: true,
+            compra_funding_revenda: 0,
+            compra_funding_investimento: 0,
+            compra_funding_pessoal: 0,
+            observacoes:
+              tipoProp === 'meia'
+                ? `${obsTroca} Propriedade a meia${socio ? ` com ${socio}` : ''} (herdada da venda).`
+                : obsTroca,
+            fotos: troca.fotos ?? [],
+            despesas_vinculadas: [],
+          }
+
+          trocaCompra = {
+            id: novoId(),
+            data: venda.data,
+            veiculo_id: trocaVeiculo.id,
+            valor_pago: troca.valor_avaliado,
+            forma_pagamento: 'outros',
+            vendedor_nome: venda.comprador_nome,
+            vendedor_contato: venda.comprador_contato,
+            origem: 'troca',
+            observacoes: `Recebido em troca na venda do veículo ${placaVendido}.`,
+          }
+
+          vendaFinal = {
+            ...venda,
+            troca_veiculo_id: trocaVeiculo.id,
+            valor_troca: troca.valor_avaliado,
+          }
+        }
+
         await comPersistencia(
           async () => {
-            await syncVendaCreate(venda)
+            if (trocaVeiculo && trocaCompra) {
+              await syncVeiculoCreate(trocaVeiculo)
+              await syncCompraCreate(trocaCompra)
+            }
+            await syncVendaCreate(vendaFinal)
             await syncVeiculoUpdate(venda.veiculo_id, { status: 'vendido' })
           },
           () =>
             set((s) => {
-              const vendas = [venda, ...s.vendas]
-              const veiculos = s.veiculos.map((v) =>
+              let veiculos = s.veiculos.map((v) =>
                 v.id === venda.veiculo_id
                   ? { ...v, status: 'vendido' as StatusVeiculo }
                   : v,
               )
-              return { vendas, veiculos }
+              let compras = s.compras
+              if (trocaVeiculo && trocaCompra) {
+                veiculos = [trocaVeiculo, ...veiculos]
+                compras = [trocaCompra, ...compras]
+              }
+              return {
+                vendas: [vendaFinal, ...s.vendas],
+                veiculos,
+                compras,
+              }
             }),
         )
       },

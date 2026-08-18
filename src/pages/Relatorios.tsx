@@ -8,6 +8,7 @@ import { Badge } from '@/components/Badge'
 import { PeriodoSelector } from '@/components/PeriodoSelector'
 import { RelatorioCompras } from '@/components/RelatorioCompras'
 import { RelatorioDespesas } from '@/components/RelatorioDespesas'
+import { RelatorioGanhoEstoque } from '@/components/RelatorioGanhoEstoque'
 import { RelatorioGeral } from '@/components/RelatorioGeral'
 import { RelatorioTabs } from '@/components/RelatorioTabs'
 import { RelatorioVeiculoIndividual } from '@/components/RelatorioVeiculoIndividual'
@@ -60,8 +61,16 @@ export default function Relatorios() {
   )
 
   const escopoVeiculo = escopo === 'veiculo' && !!veiculoId
+  const isGanhoEstoque = tipo === 'ganho-meia' || tipo === 'ganho-meus'
 
   function renderRelatorio() {
+    if (tipo === 'ganho-meia') {
+      return <RelatorioGanhoEstoque estado={estado} escopo="meia" />
+    }
+    if (tipo === 'ganho-meus') {
+      return <RelatorioGanhoEstoque estado={estado} escopo="meus" />
+    }
+
     if (escopoVeiculo) {
       if (tipo === 'geral' || tipo === 'veiculos') {
         return (
@@ -107,92 +116,96 @@ export default function Relatorios() {
         </p>
       </div>
 
-      <PeriodoSelector
-        periodo={periodo}
-        anosDisponiveis={anos}
-        onChange={setPeriodo}
-      />
+      {!isGanhoEstoque && (
+        <PeriodoSelector
+          periodo={periodo}
+          anosDisponiveis={anos}
+          onChange={setPeriodo}
+        />
+      )}
 
       <RelatorioTabs valor={tipo} onChange={setTipo} />
 
-      {/* Nível 2 — Escopo */}
-      <div className="card space-y-3 p-4 md:p-5">
-        <div className="flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-md bg-primary/15 text-primary">
-            <FileBarChart size={14} />
-          </span>
-          <h2 className="text-sm font-semibold tracking-tight">
-            Escopo do relatório
-          </h2>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setEscopo('todos')}
-            className={[
-              'btn-press rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors',
-              escopo === 'todos'
-                ? 'border-primary bg-primary/15 text-primary'
-                : 'border-border-light text-zinc-600 hover:border-primary/40 dark:border-border-dark dark:text-zinc-300',
-            ].join(' ')}
-          >
-            Todos
-          </button>
-          <button
-            type="button"
-            onClick={() => setEscopo('veiculo')}
-            className={[
-              'btn-press inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors',
-              escopo === 'veiculo'
-                ? 'border-primary bg-primary/15 text-primary'
-                : 'border-border-light text-zinc-600 hover:border-primary/40 dark:border-border-dark dark:text-zinc-300',
-            ].join(' ')}
-          >
-            <Car size={12} />
-            Veículo específico
-          </button>
-        </div>
-
-        {escopo === 'veiculo' && (
-          <div className="flex flex-wrap items-center gap-3">
-            <select
-              value={veiculoId}
-              onChange={(e) => setVeiculoId(e.target.value)}
-              className="input max-w-md"
-              aria-label="Selecionar veículo"
-            >
-              <option value="">Selecione um veículo…</option>
-              {veiculosOrdenados.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {labelVeiculoSelect(v)}
-                </option>
-              ))}
-            </select>
-            {veiculoSelecionado && (
-              <Badge tone="primary">{veiculoSelecionado.placa}</Badge>
-            )}
+      {/* Nível 2 — Escopo (não se aplica aos relatórios de ganho do estoque) */}
+      {!isGanhoEstoque && (
+        <div className="card space-y-3 p-4 md:p-5">
+          <div className="flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-primary/15 text-primary">
+              <FileBarChart size={14} />
+            </span>
+            <h2 className="text-sm font-semibold tracking-tight">
+              Escopo do relatório
+            </h2>
           </div>
-        )}
 
-        {escopo === 'veiculo' && !veiculoId && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
-            Selecione um veículo para gerar o relatório individual.
-          </p>
-        )}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setEscopo('todos')}
+              className={[
+                'btn-press rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors',
+                escopo === 'todos'
+                  ? 'border-primary bg-primary/15 text-primary'
+                  : 'border-border-light text-zinc-600 hover:border-primary/40 dark:border-border-dark dark:text-zinc-300',
+              ].join(' ')}
+            >
+              Todos
+            </button>
+            <button
+              type="button"
+              onClick={() => setEscopo('veiculo')}
+              className={[
+                'btn-press inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors',
+                escopo === 'veiculo'
+                  ? 'border-primary bg-primary/15 text-primary'
+                  : 'border-border-light text-zinc-600 hover:border-primary/40 dark:border-border-dark dark:text-zinc-300',
+              ].join(' ')}
+            >
+              <Car size={12} />
+              Veículo específico
+            </button>
+          </div>
 
-        {escopoVeiculo && veiculoSelecionado && (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {tipo === 'geral' || tipo === 'veiculos'
-              ? `Relatório consolidado de ${veiculoSelecionado.placa} — compra, despesas, venda e lucro.`
-              : tipo === 'despesas'
-                ? `Todas as despesas de ${veiculoSelecionado.placa} (histórico completo — bate com o módulo Despesas).`
-                : `Filtrando ${tipo} do veículo ${veiculoSelecionado.placa} no período ${labelPeriodo(periodo)}.`}
-          </p>
-        )}
-      </div>
+          {escopo === 'veiculo' && (
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={veiculoId}
+                onChange={(e) => setVeiculoId(e.target.value)}
+                className="input max-w-md"
+                aria-label="Selecionar veículo"
+              >
+                <option value="">Selecione um veículo…</option>
+                {veiculosOrdenados.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {labelVeiculoSelect(v)}
+                  </option>
+                ))}
+              </select>
+              {veiculoSelecionado && (
+                <Badge tone="primary">{veiculoSelecionado.placa}</Badge>
+              )}
+            </div>
+          )}
 
-      {escopo === 'veiculo' && !veiculoId ? (
+          {escopo === 'veiculo' && !veiculoId && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Selecione um veículo para gerar o relatório individual.
+            </p>
+          )}
+
+          {escopoVeiculo && veiculoSelecionado && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              {tipo === 'geral' || tipo === 'veiculos'
+                ? `Relatório consolidado de ${veiculoSelecionado.placa} — compra, despesas, venda e lucro.`
+                : tipo === 'despesas'
+                  ? `Todas as despesas de ${veiculoSelecionado.placa} (histórico completo — bate com o módulo Despesas).`
+                  : `Filtrando ${tipo} do veículo ${veiculoSelecionado.placa} no período ${labelPeriodo(periodo)}.`}
+            </p>
+          )}
+        </div>
+      )}
+
+      {!isGanhoEstoque && escopo === 'veiculo' && !veiculoId ? (
         <div className="card mx-auto max-w-4xl p-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
           Escolha um veículo acima para visualizar o relatório.
         </div>

@@ -21,12 +21,26 @@ import {
 } from 'date-fns'
 import type {
   Compra,
+  Configuracoes,
   Despesa,
   TipoDespesa,
   Veiculo,
   Venda,
 } from '@/types'
-import { calcularLucroVenda, custoTotalVeiculo, parteSocioVenda } from './calculos'
+import {
+  montarEstadoBancoPessoal,
+  montarVisaoPatrimonioRevenda,
+  nomeDonoCompleto,
+  resumoCaixaRevendaCard,
+} from './bancoPessoal'
+import {
+  calcularLucroVenda,
+  custoAquisicaoParaLucro,
+  custoTotalVeiculo,
+  parteSocioVenda,
+  receitaRealizadaDaVenda,
+  valorCaixaDaVenda,
+} from './calculos'
 import { calcularMetricasTempoVeiculo } from './tempoVeiculo'
 
 // -----------------------------------------------------------------------------
@@ -276,6 +290,233 @@ export function calcularValorEstoque(
 }
 
 // -----------------------------------------------------------------------------
+// GANHO POTENCIAL DO ESTOQUE (a meia vs meus)
+// -----------------------------------------------------------------------------
+
+export type EscopoGanhoEstoque = 'meia' | 'meus'
+
+export interface LinhaGanhoEstoque {
+  veiculo: Veiculo
+  investido: number
+  vendaPretendida: number
+  /** Ganho bruto se vender pelo pretendido (pretendido − investido). */
+  ganhoBruto: number
+  /** Sua parte do ganho (100% solo / 50% a meia). */
+  ganhoMeu: number
+  /** Parte do sócio (só a meia). */
+  ganhoSocio: number
+  margemPercentual: number
+}
+
+export interface ResumoGanhoEstoque {
+  escopo: EscopoGanhoEstoque
+  qtd: number
+  investido: number
+  vendaPretendida: number
+  ganhoBruto: number
+  ganhoMeu: number
+  ganhoSocio: number
+  linhas: LinhaGanhoEstoque[]
+}
+
+/**
+ * Projeção de ganho com o que está em estoque agora.
+ * - `meia`: só veículos a meia (ganho dividido 50/50)
+ * - `meus`: só veículos solo (100% seus)
+ */
+export function calcularGanhoEstoque(
+  veiculos: Veiculo[],
+  despesas: Despesa[],
+  escopo: EscopoGanhoEstoque,
+): ResumoGanhoEstoque {
+  const emEstoque = veiculos.filter((v) => {
+    if (v.status === 'vendido') return false
+    if (escopo === 'meia') return v.tipo_propriedade === 'meia'
+    return v.tipo_propriedade === 'solo'
+  })
+
+  const linhas: LinhaGanhoEstoque[] = emEstoque.map((veiculo) => {
+    const investido = custoTotalVeiculo(veiculo, despesas)
+    const vendaPretendida = Number(veiculo.valor_venda_pretendido) || 0
+    const ganhoBruto = vendaPretendida - investido
+    const isMeia = veiculo.tipo_propriedade === 'meia'
+    const ganhoSocio = isMeia ? ganhoBruto * 0.5 : 0
+    const ganhoMeu = ganhoBruto - ganhoSocio
+    const margemPercentual =
+      investido > 0 ? (ganhoBruto / investido) * 100 : 0
+    return {
+      veiculo,
+      investido,
+      vendaPretendida,
+      ganhoBruto,
+      ganhoMeu,
+      ganhoSocio,
+      margemPercentual,
+    }
+  })
+
+  linhas.sort((a, b) => b.ganhoMeu - a.ganhoMeu)
+
+  return {
+    escopo,
+    qtd: linhas.length,
+    investido: linhas.reduce((a, l) => a + l.investido, 0),
+    vendaPretendida: linhas.reduce((a, l) => a + l.vendaPretendida, 0),
+    ganhoBruto: linhas.reduce((a, l) => a + l.ganhoBruto, 0),
+    ganhoMeu: linhas.reduce((a, l) => a + l.ganhoMeu, 0),
+    ganhoSocio: linhas.reduce((a, l) => a + l.ganhoSocio, 0),
+    linhas,
+  }
+}
+
+// -----------------------------------------------------------------------------
+// GANHO A MEIA COMPLETO — caixa + histórico vendidos + potencial estoque
+// -----------------------------------------------------------------------------
+
+export interface LinhaGanhoMeiaVendido {
+  veiculo: Veiculo
+  venda: Venda
+  data: string
+  valorCaixa: number
+  lucroBruto: number
+  lucroMeu: number
+  lucroSocio: number
+}
+
+export interface ResumoGanhoMeiaCompleto {
+  nomeDono: string
+  nomeSocio: string
+  /** Caixa revenda (giro a meia) — mesmos números do Banco Pessoal. */
+  caixa: {
+    saldo: number
+    parteDono: number
+    parteSocio: number
+    emCarros: number
+    totalDespesas: number
+    totalNoGiro: number
+  }
+  /** Lucro realizado de todos os carros a meia já vendidos (histórico). */
+  realizado: {
+    qtd: number
+    lucroBruto: number
+    lucroMeu: number
+    lucroSocio: number
+    linhas: LinhaGanhoMeiaVendido[]
+  }
+  /** Projeção dos carros a meia ainda em estoque. */
+  potencial: ResumoGanhoEstoque
+  /**
+   * Potencial consolidado: caixa atual + venda pretendida do estoque.
+   * Divisão 50/50 (a meia).
+   */
+  potencialComCaixa: {
+    total: number
+    parteDono: number
+    parteSocio: number
+    emCaixa: number
+    vendaPretendida: number
+    /** Compra + despesas dos carros a meia ainda em estoque. */
+    valorColocado: number
+  }
+}
+
+/**
+ * Relatório a meia completo: caixa do giro + histórico dos vendidos +
+ * potencial do estoque. Reusa a simulação do Banco Pessoal para o caixa.
+ */
+export function calcularRelatorioGanhoMeia(
+  veiculos: Veiculo[],
+  vendas: Venda[],
+  despesas: Despesa[],
+  configuracoes: Configuracoes,
+): ResumoGanhoMeiaCompleto {
+  const socios = configuracoes.socios ?? []
+  const nomeRevenda = configuracoes.nome_revenda || 'Revenda'
+  const dono = nomeDonoCompleto(socios)
+  const capital = Number(configuracoes.capital_inicial_pessoal) || 0
+
+  const estadoBp = montarEstadoBancoPessoal(
+    despesas,
+    veiculos,
+    vendas,
+    capital,
+    dono,
+    nomeRevenda,
+    socios,
+  )
+  const card = resumoCaixaRevendaCard(
+    estadoBp.carros,
+    veiculos,
+    estadoBp.resumo.caixaRevenda,
+    socios,
+  )
+  const visao = montarVisaoPatrimonioRevenda(
+    card.saldoTotal,
+    card.todosCarros,
+    despesas,
+    nomeRevenda,
+    socios,
+  )
+
+  const veicById = new Map(veiculos.map((v) => [v.id, v]))
+  const linhasVendidos: LinhaGanhoMeiaVendido[] = []
+
+  for (const venda of vendas) {
+    const veiculo = veicById.get(venda.veiculo_id)
+    if (!veiculo || veiculo.tipo_propriedade !== 'meia') continue
+    const lucroBruto = calcularLucroVenda(venda, veiculo, despesas, vendas)
+    const lucroSocio = parteSocioVenda(venda, veiculo, despesas, vendas)
+    linhasVendidos.push({
+      veiculo,
+      venda,
+      data: venda.data,
+      valorCaixa: valorCaixaDaVenda(venda),
+      lucroBruto,
+      lucroMeu: lucroBruto - lucroSocio,
+      lucroSocio,
+    })
+  }
+
+  linhasVendidos.sort((a, b) => b.data.localeCompare(a.data))
+
+  const realizado = {
+    qtd: linhasVendidos.length,
+    lucroBruto: linhasVendidos.reduce((a, l) => a + l.lucroBruto, 0),
+    lucroMeu: linhasVendidos.reduce((a, l) => a + l.lucroMeu, 0),
+    lucroSocio: linhasVendidos.reduce((a, l) => a + l.lucroSocio, 0),
+    linhas: linhasVendidos,
+  }
+
+  const potencial = calcularGanhoEstoque(veiculos, despesas, 'meia')
+  const emCaixa = card.saldoTotal
+  const vendaPretendida = potencial.vendaPretendida
+  const potencialTotal = emCaixa + vendaPretendida
+
+  return {
+    nomeDono: card.nomeDono,
+    nomeSocio: card.nomeSocio,
+    caixa: {
+      saldo: emCaixa,
+      parteDono: card.parteDono,
+      parteSocio: card.parteSocio,
+      emCarros: visao.emCarros,
+      totalDespesas: visao.totalDespesas,
+      totalNoGiro: visao.totalNoGiro,
+    },
+    realizado,
+    potencial,
+    potencialComCaixa: {
+      total: potencialTotal,
+      parteDono: potencialTotal / 2,
+      parteSocio: potencialTotal / 2,
+      emCaixa,
+      vendaPretendida,
+      valorColocado: potencial.investido,
+    },
+  }
+}
+
+// -----------------------------------------------------------------------------
 // RESUMO FINANCEIRO DO PERÍODO
 // -----------------------------------------------------------------------------
 
@@ -329,14 +570,17 @@ export function calcularResumoFinanceiro(
     (d) => d.data,
   )
 
-  const receita = vendasPeriodo.reduce((acc, v) => acc + v.valor_venda, 0)
+  const receita = vendasPeriodo.reduce(
+    (acc, v) => acc + receitaRealizadaDaVenda(v),
+    0,
+  )
 
-  // Custo dos veículos VENDIDOS no período = somatório do valor de compra
-  // de cada veículo cuja venda caiu no intervalo. Se o veículo já foi
-  // removido, ignora silenciosamente (não é possível atribuir custo).
+  // Custo dos veículos VENDIDOS no período (aquisição para lucro realizado;
+  // bem que entrou por troca tem custo 0 até ser vendido).
   const custoVeiculos = vendasPeriodo.reduce((acc, v) => {
     const veic = veiculos.find((x) => x.id === v.veiculo_id)
-    return acc + (veic?.valor_compra ?? 0)
+    if (!veic) return acc
+    return acc + custoAquisicaoParaLucro(veic, vendas)
   }, 0)
 
   const custoDespesas = despesasPeriodo.reduce((acc, d) => acc + d.valor, 0)
@@ -349,11 +593,11 @@ export function calcularResumoFinanceiro(
   // lucro contábil do período (que inclui despesas de carros ainda em estoque).
   const realizadoVeiculos = vendasPeriodo.reduce((acc, v) => {
     const veic = veiculos.find((x) => x.id === v.veiculo_id)
-    return acc + calcularLucroVenda(v, veic, despesas)
+    return acc + calcularLucroVenda(v, veic, despesas, vendas)
   }, 0)
   const parteSocios = vendasPeriodo.reduce((acc, v) => {
     const veic = veiculos.find((x) => x.id === v.veiculo_id)
-    return acc + parteSocioVenda(v, veic, despesas)
+    return acc + parteSocioVenda(v, veic, despesas, vendas)
   }, 0)
   const despesasGeraisPeriodo = despesasPeriodo
     .filter((d) => !d.veiculo_id)
@@ -540,8 +784,10 @@ export function calcularIndicadoresDestaque(
 
   const ticketMedioVenda =
     vendasPeriodo.length > 0
-      ? vendasPeriodo.reduce((acc, v) => acc + v.valor_venda, 0) /
-        vendasPeriodo.length
+      ? vendasPeriodo.reduce(
+          (acc, v) => acc + receitaRealizadaDaVenda(v),
+          0,
+        ) / vendasPeriodo.length
       : 0
 
   return {
@@ -689,7 +935,7 @@ export function receitaPorFormaRecebimento(
   const map = new Map<string, number>()
   for (const v of vendasPeriodo) {
     const k = (v.forma_recebimento || 'outros').toString()
-    map.set(k, (map.get(k) ?? 0) + v.valor_venda)
+    map.set(k, (map.get(k) ?? 0) + receitaRealizadaDaVenda(v))
   }
   const total = Array.from(map.values()).reduce((s, n) => s + n, 0)
   return Array.from(map.entries())
@@ -770,9 +1016,12 @@ export function calcularDadosVeiculoIndividual(
 
   const despesasPorTipo = agruparDespesasPorTipoDetalhe(despesasVeic)
   const { total: totalDespesas } = resumirDespesas(despesasVeic)
-  const custoTotal = veiculo.valor_compra + totalDespesas
-  const receita = venda?.valor_venda ?? 0
-  const lucro = venda ? receita - custoTotal : 0
+  const aquisicao = custoAquisicaoParaLucro(veiculo, vendas)
+  const custoTotal = aquisicao + totalDespesas
+  const receita = venda ? receitaRealizadaDaVenda(venda) : 0
+  const lucro = venda
+    ? calcularLucroVenda(venda, veiculo, despesas, vendas)
+    : 0
   const roi = venda && custoTotal > 0 ? (lucro / custoTotal) * 100 : 0
 
   return {

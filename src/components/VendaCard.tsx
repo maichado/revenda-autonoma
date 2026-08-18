@@ -1,4 +1,4 @@
-import { Calendar, Pencil, Trash2, User } from 'lucide-react'
+import { ArrowLeftRight, Calendar, Pencil, Trash2, User } from 'lucide-react'
 import type { Despesa, Veiculo, Venda } from '@/types'
 import {
   formatarDataCurta,
@@ -8,13 +8,21 @@ import {
 import {
   calcularLucroVenda,
   calcularROIVenda,
+  receitaRealizadaDaVenda,
 } from '@/utils/calculos'
+import { RelacaoOrigemTrocaInfo } from './TrocaVeiculoInfo'
 import { BadgeFormaRecebimento, formatarParcelas } from './VendaTable'
 
 interface Props {
   venda: Venda
   veiculo?: Veiculo
+  /** Bem que entrou na troca (quando houver). */
+  veiculoTroca?: Veiculo
   despesas: Despesa[]
+  /** Todas as vendas — necessário para lucro de bem que entrou por troca. */
+  vendas: Venda[]
+  /** Mapa de veículos — mostra relação Uno ↔ BIZ quando este bem entrou por troca. */
+  veiculosPorId?: Record<string, Veiculo | undefined>
   onEditar: () => void
   onExcluir: () => void
 }
@@ -24,12 +32,15 @@ interface Props {
 export function VendaCard({
   venda,
   veiculo,
+  veiculoTroca,
   despesas,
+  vendas,
+  veiculosPorId,
   onEditar,
   onExcluir,
 }: Props) {
-  const lucro = calcularLucroVenda(venda, veiculo, despesas)
-  const roi = calcularROIVenda(venda, veiculo, despesas)
+  const lucro = calcularLucroVenda(venda, veiculo, despesas, vendas)
+  const roi = calcularROIVenda(venda, veiculo, despesas, vendas)
   const corLucro =
     lucro >= 0
       ? 'text-emerald-600 dark:text-emerald-400'
@@ -54,14 +65,29 @@ export function VendaCard({
           ) : (
             <p className="text-sm italic text-zinc-400">veículo removido</p>
           )}
+          {veiculo && veiculosPorId && (
+            <RelacaoOrigemTrocaInfo
+              veiculo={veiculo}
+              vendas={vendas}
+              veiculosPorId={veiculosPorId}
+              variant="compact"
+            />
+          )}
           <p className="mt-1 flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
             <Calendar size={11} />
             <span className="tabular">{formatarDataCurta(venda.data)}</span>
           </p>
         </div>
-        <p className="tabular text-right text-base font-semibold tracking-tight">
-          {formatarMoeda(venda.valor_venda)}
-        </p>
+        <div className="text-right">
+          <p className="tabular text-base font-semibold tracking-tight">
+            {formatarMoeda(receitaRealizadaDaVenda(venda))}
+          </p>
+          {(Number(venda.valor_troca) || 0) > 0 && (
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+              em dinheiro
+            </p>
+          )}
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -69,7 +95,34 @@ export function VendaCard({
         <span className="badge bg-zinc-100 text-zinc-700 dark:bg-white/[0.08] dark:text-zinc-200">
           {formatarParcelas(venda.parcelas)}
         </span>
+        {(venda.troca_veiculo_id || venda.valor_troca != null) && (
+          <span
+            className="badge inline-flex items-center gap-1 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+            title={
+              venda.entrada != null && venda.valor_troca != null
+                ? `${formatarMoeda(venda.entrada)} (dinheiro) + ${formatarMoeda(venda.valor_troca)} (troca) = ${formatarMoeda(venda.valor_venda)}`
+                : 'Bem recebido em troca e integrado ao estoque'
+            }
+          >
+            <ArrowLeftRight size={11} />
+            Troca
+            {veiculoTroca
+              ? `: ${veiculoTroca.categoria === 'moto' ? 'moto' : 'carro'} ${veiculoTroca.placa}`
+              : venda.valor_troca != null
+                ? ` ${formatarMoeda(venda.valor_troca)}`
+                : ''}
+          </span>
+        )}
       </div>
+      {venda.valor_troca != null && (
+        <p className="tabular text-[11px] text-zinc-500 dark:text-zinc-400">
+          {formatarMoeda(venda.entrada ?? 0)} dinheiro +{' '}
+          {formatarMoeda(venda.valor_troca)} troca ={' '}
+          <span className="font-medium text-zinc-700 dark:text-zinc-200">
+            {formatarMoeda(venda.valor_venda)}
+          </span>
+        </p>
+      )}
 
       <div className="text-xs">
         <p className="flex items-center gap-1 font-medium text-zinc-700 dark:text-zinc-200">

@@ -1368,7 +1368,7 @@ function CardCaixaRevenda({
         onClose={() => setModalAberto(false)}
         size="2xl"
         title="Caixa revenda"
-        description={`${subtitulo || 'Loja'} · ${formatarMoeda(visao.emCaixa)} caixa + ${formatarMoeda(visao.emCarros)} carros${visao.totalDespesas > 0 ? ` + ${formatarMoeda(visao.totalDespesas)} despesas` : ''}`}
+        description={`${subtitulo || 'Loja'} · ${formatarMoeda(visao.emCaixa)} caixa + ${formatarMoeda(visao.emCarros)} carros${visao.totalDespesas > 0 ? ` · ${formatarMoeda(visao.totalDespesas)} já gastos em despesas` : ''}`}
       >
         <ModalCaixaRevendaConteudo
           resumo={resumo}
@@ -1450,9 +1450,6 @@ function VisaoGiroRevenda({
     visao.totalNoGiro > 0 ? (visao.emCaixa / visao.totalNoGiro) * 100 : 100
   const pctCarros =
     visao.totalNoGiro > 0 ? (visao.emCarros / visao.totalNoGiro) * 100 : 0
-  const pctDespesas =
-    visao.totalNoGiro > 0 ? (visao.totalDespesas / visao.totalNoGiro) * 100 : 0
-  const colsDespesas = visao.totalDespesas > 0 ? 3 : 2
 
   return (
     <div className="space-y-5">
@@ -1464,7 +1461,7 @@ function VisaoGiroRevenda({
           {formatarMoeda(visao.totalNoGiro)}
         </p>
         <p className="mt-0.5 text-xs text-zinc-500">
-          Só a parte do caixa revenda (giro a meia)
+          Caixa + valor em carros · giro a meia
         </p>
 
         {visao.totalNoGiro > 0 && (
@@ -1490,25 +1487,8 @@ function VisaoGiroRevenda({
                   {pctCarros >= 15 ? formatarMoeda(visao.emCarros) : ''}
                 </div>
               )}
-              {visao.totalDespesas > 0 && (
-                <div
-                  className="flex items-center justify-center bg-violet-200 text-[10px] font-semibold text-violet-800 transition-all dark:bg-violet-700 dark:text-violet-100"
-                  style={{
-                    width: `${Math.max(pctDespesas, pctDespesas > 0 ? 8 : 0)}%`,
-                  }}
-                >
-                  {pctDespesas >= 15
-                    ? formatarMoeda(visao.totalDespesas)
-                    : ''}
-                </div>
-              )}
             </div>
-            <div
-              className={[
-                'mt-2 grid gap-3',
-                colsDespesas === 3 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2',
-              ].join(' ')}
-            >
+            <div className="mt-2 grid grid-cols-2 gap-3">
               <div className="rounded-lg border border-violet-500/30 bg-white/60 p-3 dark:bg-black/20">
                 <div className="flex items-center gap-2 text-violet-700 dark:text-violet-300">
                   <Banknote size={16} />
@@ -1535,23 +1515,27 @@ function VisaoGiroRevenda({
                   Revenda na compra (estoque)
                 </p>
               </div>
-              {visao.totalDespesas > 0 && (
-                <div className="rounded-lg border border-violet-500/30 bg-white/60 p-3 dark:bg-black/20">
-                  <div className="flex items-center gap-2 text-violet-700 dark:text-violet-300">
-                    <Receipt size={16} />
-                    <span className="text-xs font-semibold uppercase">
-                      Despesas
+            </div>
+
+            {visao.totalDespesas > 0 && (
+              <div className="mt-3 rounded-lg border border-dashed border-zinc-300/80 bg-zinc-50/80 px-3 py-2.5 dark:border-zinc-600 dark:bg-black/20">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+                    <Receipt size={15} />
+                    <span className="text-xs font-semibold uppercase tracking-wide">
+                      Despesas já gastas
                     </span>
                   </div>
-                  <p className="tabular mt-1 text-xl font-bold text-violet-800 dark:text-violet-200">
+                  <p className="tabular text-sm font-semibold text-zinc-700 dark:text-zinc-200">
                     {formatarMoeda(visao.totalDespesas)}
                   </p>
-                  <p className="text-[11px] text-zinc-500">
-                    Em carros em estoque · caixa revenda
-                  </p>
                 </div>
-              )}
-            </div>
+                <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Saiu do caixa (preparação dos carros). Não entra no total
+                  acima — não é dinheiro que ainda se tem.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

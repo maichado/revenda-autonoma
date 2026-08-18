@@ -42,6 +42,8 @@ import type {
 import {
   classificarOrigemLucroVeiculo,
   despesasDoVeiculo,
+  valorCaixaDaVenda,
+  veiculoEntrouPorTroca,
 } from '@/utils/calculos'
 import { NOME_REVENDA_PADRAO } from '@/constants/marca'
 import { despesasCaixaRevenda, resolverOrigemDespesa } from '@/utils/despesaOrigem'
@@ -364,8 +366,12 @@ export function resumoCaixaRevendaCard(
 export interface VisaoPatrimonioRevenda {
   emCaixa: number
   emCarros: number
-  /** Despesas (caixa revenda) dos carros ainda em estoque. */
+  /**
+   * Despesas pagas pelo caixa revenda nos carros em estoque.
+   * Já saíram do caixa — não entram em `totalNoGiro` (não é dinheiro em mãos).
+   */
   totalDespesas: number
+  /** Dinheiro ainda no giro: em caixa + em carros (compra). */
   totalNoGiro: number
   carrosEstoque: CarroCaixaRevenda[]
 }
@@ -447,7 +453,8 @@ export function montarVisaoPatrimonioRevenda(
     emCaixa: saldoCaixa,
     emCarros,
     totalDespesas,
-    totalNoGiro: saldoCaixa + emCarros + totalDespesas,
+    // Despesa já saiu do caixa: não soma de novo (não é dinheiro que ainda se tem).
+    totalNoGiro: saldoCaixa + emCarros,
     carrosEstoque,
   }
 }
@@ -813,6 +820,9 @@ export function sugerirFundingCompraFormulario(
   }
   if (valorCompra <= 0) return vazio
 
+  // Troca no estoque: não sugere saída de caixa.
+  if (veiculoEntrouPorTroca(veiculo.id, vendas)) return vazio
+
   const { caixaRevenda, caixaInvestimento } = saldosCaixasDisponiveis(
     veiculos,
     vendas,
@@ -975,10 +985,12 @@ function debitarCaixaInvestimento(
   }
 }
 
-/** Onde entra o valor de uma venda — caixas separados, sem misturar. */
+/** Onde entra o DINHEIRO de uma venda — caixas separados, sem misturar.
+ *  Com troca, passe só o valor em caixa (entrada), não o valor_venda cheio.
+ */
 export function distribuirVendaPool(
   veiculo: Veiculo,
-  valorVenda: number,
+  valorCaixa: number,
   funding?: FundingCompra,
 ): { creditoPool: number; creditoRevenda: number; detalhe: string } {
   const origem = classificarOrigemLucroVeiculo(veiculo, funding)
@@ -987,23 +999,23 @@ export function distribuirVendaPool(
   if (origem === 'compartilhada') {
     return {
       creditoPool: 0,
-      creditoRevenda: valorVenda,
-      detalhe: `Venda ${nome} — ${formatarMoedaCurta(valorVenda)} no caixa revenda (giro a meia: vendeu → recompra)`,
+      creditoRevenda: valorCaixa,
+      detalhe: `Venda ${nome} — ${formatarMoedaCurta(valorCaixa)} no caixa revenda (giro a meia: vendeu → recompra)`,
     }
   }
 
   if (origem === 'pessoal') {
     return {
-      creditoPool: valorVenda,
+      creditoPool: valorCaixa,
       creditoRevenda: 0,
-      detalhe: `Venda ${nome} — ${formatarMoedaCurta(valorVenda)} no caixa investimento (100% seu)`,
+      detalhe: `Venda ${nome} — ${formatarMoedaCurta(valorCaixa)} no caixa investimento (100% seu)`,
     }
   }
 
   return {
     creditoPool: 0,
-    creditoRevenda: valorVenda,
-    detalhe: `Venda ${nome} — ${formatarMoedaCurta(valorVenda)} no caixa revenda`,
+    creditoRevenda: valorCaixa,
+    detalhe: `Venda ${nome} — ${formatarMoedaCurta(valorCaixa)} no caixa revenda`,
   }
 }
 
@@ -1406,15 +1418,38 @@ export function simularPoolPessoal(
 
     if (ev.tipo === 'venda') {
 
-      const valorVenda = Number(ev.venda.valor_venda) || 0
+      const valorNegocio = Number(ev.venda.valor_venda) || 0
+      const valorCaixa = valorCaixaDaVenda(ev.venda)
+      const valorTroca = Number(ev.venda.valor_troca) || 0
 
-      if (valorVenda <= 0) continue
+      if (valorNegocio <= 0 && valorCaixa <= 0) continue
+
+      // Só o dinheiro entra no caixa; o bem da troca vira estoque (sem crédito cheio).
+      if (valorCaixa <= 0) {
+        if (valorTroca > 0) {
+          registrarRevenda({
+            id: `venda-troca-${ev.venda.id}`,
+            data: ev.data,
+            tipo: 'venda',
+            veiculo_id: ev.veiculo.id,
+            carro_nome: nomeVeiculo(ev.veiculo),
+            valor: 0,
+            detalhe: `Venda ${nomeVeiculo(ev.veiculo)} — negócio ${formatarMoedaCurta(valorNegocio)} com troca de ${formatarMoedaCurta(valorTroca)}; sem dinheiro em caixa`,
+          })
+        }
+        continue
+      }
 
       const { creditoPool, creditoRevenda, detalhe } = distribuirVendaPool(
         ev.veiculo,
-        valorVenda,
+        valorCaixa,
         fundingPorVeiculo.get(ev.veiculo.id),
       )
+
+      const detalheCaixa =
+        valorTroca > 0
+          ? `${detalhe} · negócio ${formatarMoedaCurta(valorNegocio)} (troca ${formatarMoedaCurta(valorTroca)} no estoque)`
+          : detalhe
 
       if (creditoRevenda > 0) {
         saldoRevenda += creditoRevenda
@@ -1425,7 +1460,7 @@ export function simularPoolPessoal(
           veiculo_id: ev.veiculo.id,
           carro_nome: nomeVeiculo(ev.veiculo),
           valor: creditoRevenda,
-          detalhe,
+          detalhe: detalheCaixa,
         })
       }
 
@@ -1449,7 +1484,7 @@ export function simularPoolPessoal(
 
           saldo_apos: saldoTotal(),
 
-          detalhe,
+          detalhe: detalheCaixa,
 
         })
 
@@ -1469,6 +1504,30 @@ export function simularPoolPessoal(
 
     if (valorCompra <= 0) continue
 
+    // Bem recebido em troca: ativo no estoque, sem débito de caixa.
+    if (veiculoEntrouPorTroca(v.id, vendas)) {
+      fundingPorVeiculo.set(v.id, {
+        veiculo_id: v.id,
+        do_revenda: 0,
+        do_capital_inicial: 0,
+        do_reinvestimento: 0,
+        do_bolso: 0,
+      })
+      registrarRevenda({
+        id: `troca-estoque-${v.id}`,
+        data: v.data_compra,
+        tipo: 'compra',
+        veiculo_id: v.id,
+        carro_nome: nomeVeiculo(v),
+        valor: 0,
+        detalhe: `Troca — ${nomeVeiculo(v)} entrou no estoque (${formatarMoedaCurta(valorCompra)} em ativo, sem saída de caixa)${
+          v.tipo_propriedade === 'meia'
+            ? ' · a meia (herdado da venda)'
+            : ''
+        }`,
+      })
+      continue
+    }
 
 
     let doRevendaTotal: number
@@ -2464,13 +2523,15 @@ export function ehPagoPorDono(pagoPor: string, dono: string): boolean {
 
 
 function statusVeiculoParaPessoal(status: StatusVeiculo): StatusCarroPessoal {
-
-  if (status === 'disponível' || status === 'em preparação') return 'em_estoque'
-
+  if (
+    status === 'disponível' ||
+    status === 'em preparação' ||
+    status === 'mecânico'
+  ) {
+    return 'em_estoque'
+  }
   if (status === 'reservado') return 'reservado'
-
   return 'vendido'
-
 }
 
 

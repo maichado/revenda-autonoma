@@ -6,9 +6,13 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { useToast } from '@/hooks/useToast'
 import { useSalvarServidor } from '@/hooks/useSalvarServidor'
 import { formatPbError } from '@/lib/pbApi'
-import { calcularLucroVenda } from '@/utils/calculos'
+import {
+  calcularLucroVenda,
+  receitaRealizadaDaVenda,
+  valorCaixaDaVenda,
+} from '@/utils/calculos'
 import { exportarVendasCSV } from '@/utils/exportarCSV'
-import type { Veiculo, Venda } from '@/types'
+import type { TrocaNaVendaInput, Veiculo, Venda } from '@/types'
 
 import { Button } from '@/components/Button'
 import { Modal } from '@/components/Modal'
@@ -100,16 +104,20 @@ export default function Vendas() {
   const totais = useMemo(() => {
     const quantidade = vendasOrdenadas.length
     const receita = vendasOrdenadas.reduce(
-      (acc, v) => acc + v.valor_venda,
+      (acc, v) => acc + receitaRealizadaDaVenda(v),
+      0,
+    )
+    const caixa = vendasOrdenadas.reduce(
+      (acc, v) => acc + valorCaixaDaVenda(v),
       0,
     )
     const lucroTotal = vendasOrdenadas.reduce((acc, v) => {
       const veic = veiculosPorId[v.veiculo_id]
-      return acc + calcularLucroVenda(v, veic, despesas)
+      return acc + calcularLucroVenda(v, veic, despesas, vendas)
     }, 0)
     const ticketMedio = quantidade > 0 ? receita / quantidade : 0
-    return { quantidade, receita, lucroTotal, ticketMedio }
-  }, [vendasOrdenadas, veiculosPorId, despesas])
+    return { quantidade, receita, caixa, lucroTotal, ticketMedio }
+  }, [vendasOrdenadas, veiculosPorId, despesas, vendas])
 
   // Handlers ---------------------------------------------------------------
   function abrirCadastro() {
@@ -131,7 +139,7 @@ export default function Vendas() {
     setFormAberto(false)
     setEditando(undefined)
   }
-  async function salvarVenda(v: Venda) {
+  async function salvarVenda(v: Venda, troca?: TrocaNaVendaInput) {
     if (editando) {
       const ok = await salvarServidor(
         () => updateVenda(editando.id, v),
@@ -140,8 +148,10 @@ export default function Vendas() {
       if (ok) fecharForm()
     } else {
       const ok = await salvarServidor(
-        () => addVenda(v),
-        'Venda registrada',
+        () => addVenda(v, troca),
+        troca
+          ? 'Venda registrada com troca no estoque'
+          : 'Venda registrada',
       )
       if (ok) fecharForm()
     }
@@ -277,7 +287,14 @@ export default function Vendas() {
                     key={v.id}
                     venda={v}
                     veiculo={veiculosPorId[v.veiculo_id]}
+                    veiculoTroca={
+                      v.troca_veiculo_id
+                        ? veiculosPorId[v.troca_veiculo_id]
+                        : undefined
+                    }
                     despesas={despesas}
+                    vendas={vendas}
+                    veiculosPorId={veiculosPorId}
                     onEditar={() => abrirEdicao(v)}
                     onExcluir={() => setVendaExcluir(v)}
                   />
@@ -340,6 +357,7 @@ function TotaisMobile({
   totais: {
     quantidade: number
     receita: number
+    caixa?: number
     lucroTotal: number
     ticketMedio: number
   }
@@ -362,10 +380,20 @@ function TotaisMobile({
         <dd className="tabular text-right font-semibold">
           {totais.quantidade}
         </dd>
-        <dt className="text-zinc-500 dark:text-zinc-400">Receita</dt>
+        <dt className="text-zinc-500 dark:text-zinc-400">Receita (negócio)</dt>
         <dd className="tabular text-right font-semibold">
           {brl.format(totais.receita)}
         </dd>
+        {totais.caixa != null && totais.caixa !== totais.receita && (
+          <>
+            <dt className="text-zinc-500 dark:text-zinc-400">
+              Caixa (dinheiro)
+            </dt>
+            <dd className="tabular text-right font-semibold">
+              {brl.format(totais.caixa)}
+            </dd>
+          </>
+        )}
         <dt className="text-zinc-500 dark:text-zinc-400">Lucro total</dt>
         <dd className={['tabular text-right font-semibold', corLucro].join(' ')}>
           {brl.format(totais.lucroTotal)}

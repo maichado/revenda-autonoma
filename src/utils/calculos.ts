@@ -45,40 +45,102 @@ export function calcularLucroVeiculo(
 ): number {
   const venda = vendas.find((v) => v.veiculo_id === veiculo.id)
   if (!venda) return 0
-  return venda.valor_venda - custoTotalVeiculo(veiculo, despesas)
+  return calcularLucroVenda(venda, veiculo, despesas, vendas)
+}
+
+// -----------------------------------------------------------------------------
+// VENDA COM TROCA — caixa vs negócio
+// -----------------------------------------------------------------------------
+
+/**
+ * Dinheiro que de fato entra no caixa nesta venda.
+ * Com troca: só a entrada em dinheiro (não o valor do bem trocado).
+ * Sem troca: o valor_venda inteiro.
+ */
+export function valorCaixaDaVenda(venda: Venda): number {
+  const troca = Number(venda.valor_troca) || 0
+  if (troca > 0) {
+    if (venda.entrada != null && Number.isFinite(Number(venda.entrada))) {
+      return Math.max(0, Number(venda.entrada))
+    }
+    return Math.max(0, (Number(venda.valor_venda) || 0) - troca)
+  }
+  return Math.max(0, Number(venda.valor_venda) || 0)
+}
+
+/** Alias: receita realizada na venda (= dinheiro; troca só realiza ao vender o bem). */
+export function receitaRealizadaDaVenda(venda: Venda): number {
+  return valorCaixaDaVenda(venda)
+}
+
+/** Veículo que entrou no estoque via troca em alguma venda. */
+export function veiculoEntrouPorTroca(
+  veiculoId: string,
+  vendas: Venda[],
+): boolean {
+  return vendas.some((v) => v.troca_veiculo_id === veiculoId)
 }
 
 /**
- * Lucro POR VENDA — usa o valor da própria venda passada (não busca a
- * primeira venda do veículo). Necessário no módulo Vendas, que lista cada
- * venda individualmente (um veículo pode ter sido revendido várias vezes em
- * sistemas mais antigos, e mesmo no fluxo normal queremos calcular o lucro
- * com base no valor exato desta venda).
+ * Custo de aquisição usado no lucro realizado.
+ * Bem que entrou por troca: custo de caixa = 0 (o valor da troca só “vira”
+ * resultado quando esse bem for vendido).
+ */
+export function custoAquisicaoParaLucro(
+  veiculo: Veiculo,
+  todasVendas: Venda[] = [],
+): number {
+  if (veiculoEntrouPorTroca(veiculo.id, todasVendas)) return 0
+  return Number(veiculo.valor_compra) || 0
+}
+
+/** Soma do dinheiro em caixa das vendas do mês (exclui valor de bens em troca). */
+export function caixaDoMes(vendas: Venda[], ref: Date): number {
+  return vendas
+    .filter((v) => dentroDoMes(v.data, ref))
+    .reduce((acc, v) => acc + valorCaixaDaVenda(v), 0)
+}
+
+/**
+ * Lucro POR VENDA (realizado).
  *
- *   lucro = valor_venda − valor_compra − soma(despesas vinculadas ao veículo)
+ * Sem troca: valor_venda − custo − despesas.
+ * Com troca: só o dinheiro conta agora (ex.: R$ 11 mil); o bem no estoque
+ * não antecipa lucro — ele entra no resultado quando for vendido
+ * (aí o custo de aquisição desse bem é 0 para não descontar duas vezes).
  */
 export function calcularLucroVenda(
   venda: Venda,
   veiculo: Veiculo | undefined,
   despesas: Despesa[],
+  todasVendas: Venda[] = [],
 ): number {
   if (!veiculo) return 0
-  return venda.valor_venda - custoTotalVeiculo(veiculo, despesas)
+  const receita = receitaRealizadaDaVenda(venda)
+  const aquisicao = custoAquisicaoParaLucro(veiculo, todasVendas)
+  const desp = despesasDoVeiculo(veiculo.id, despesas)
+  return receita - aquisicao - desp
 }
 
 /**
  * ROI da venda em pontos percentuais.
- *   ROI = lucro / (valor_compra + despesas) × 100
+ *   ROI = lucro / (custo de aquisição para lucro + despesas) × 100
  */
 export function calcularROIVenda(
   venda: Venda,
   veiculo: Veiculo | undefined,
   despesas: Despesa[],
+  todasVendas: Venda[] = [],
 ): number {
   if (!veiculo) return 0
-  const custo = custoTotalVeiculo(veiculo, despesas)
-  if (custo <= 0) return 0
-  const lucro = calcularLucroVenda(venda, veiculo, despesas)
+  const aquisicao = custoAquisicaoParaLucro(veiculo, todasVendas)
+  const desp = despesasDoVeiculo(veiculo.id, despesas)
+  const custo = aquisicao + desp
+  if (custo <= 0) {
+    const lucro = calcularLucroVenda(venda, veiculo, despesas, todasVendas)
+    return lucro === 0 ? 0 : 100
+  }
+  const lucro = calcularLucroVenda(venda, veiculo, despesas, todasVendas)
   return (lucro / custo) * 100
 }
 
@@ -125,16 +187,21 @@ export function resumoFinanceiroVeiculo(
   veiculo: Veiculo,
   despesas: Despesa[],
   venda?: Venda,
+  todasVendas: Venda[] = [],
 ): ResumoFinanceiroVeiculo {
   const vendido = veiculo.status === 'vendido' && !!venda
   const lucroLiquido = vendido
-    ? calcularLucroVenda(venda, veiculo, despesas)
+    ? calcularLucroVenda(venda, veiculo, despesas, todasVendas)
     : calcularLucroEsperadoVeiculo(veiculo, despesas)
-  const valorVenda = vendido ? venda.valor_venda : veiculo.valor_venda_pretendido
+  // Com troca: no card mostra o dinheiro da venda (ex.: 11 mil), não o total do negócio.
+  const valorVenda = vendido
+    ? receitaRealizadaDaVenda(venda)
+    : veiculo.valor_venda_pretendido
+  const baseMargem = vendido
+    ? custoAquisicaoParaLucro(veiculo, todasVendas) || veiculo.valor_compra
+    : veiculo.valor_compra
   const margemPercentual =
-    veiculo.valor_compra > 0
-      ? (lucroLiquido / veiculo.valor_compra) * 100
-      : 0
+    baseMargem > 0 ? (lucroLiquido / baseMargem) * 100 : 0
   const fracao = fracaoSocio(veiculo)
   const lucroSocio = lucroLiquido * fracao
   const lucroMeu = lucroLiquido - lucroSocio
@@ -216,9 +283,10 @@ export function parteSocioVenda(
   venda: Venda,
   veiculo: Veiculo | undefined,
   despesas: Despesa[],
+  todasVendas: Venda[] = [],
 ): number {
   if (!veiculo) return 0
-  const lucro = calcularLucroVenda(venda, veiculo, despesas)
+  const lucro = calcularLucroVenda(venda, veiculo, despesas, todasVendas)
   return lucro * fracaoSocio(veiculo)
 }
 
@@ -264,10 +332,12 @@ export function dentroDoAno(isoDate: string, ref: Date): boolean {
 // AGREGAÇÕES POR MÊS
 // -----------------------------------------------------------------------------
 
+/**
+ * Receita realizada do mês = dinheiro das vendas (troca não antecipa receita;
+ * o bem só conta quando for vendido).
+ */
 export function receitaDoMes(vendas: Venda[], ref: Date): number {
-  return vendas
-    .filter((v) => dentroDoMes(v.data, ref))
-    .reduce((acc, v) => acc + v.valor_venda, 0)
+  return caixaDoMes(vendas, ref)
 }
 
 /**
@@ -324,7 +394,7 @@ export function parteSociosDoMes(
     .filter((v) => dentroDoMes(v.data, ref))
     .reduce((acc, v) => {
       const veic = veiculos.find((x) => x.id === v.veiculo_id)
-      return acc + parteSocioVenda(v, veic, despesas)
+      return acc + parteSocioVenda(v, veic, despesas, vendas)
     }, 0)
 }
 
@@ -356,7 +426,7 @@ export function lucroRealizadoMes(
   const vendasMes = vendas.filter((v) => dentroDoMes(v.data, ref))
   const realizado = vendasMes.reduce((acc, v) => {
     const veic = veiculos.find((x) => x.id === v.veiculo_id)
-    return acc + calcularLucroVenda(v, veic, despesas)
+    return acc + calcularLucroVenda(v, veic, despesas, vendas)
   }, 0)
   return realizado - despesasGeraisDoMes(despesas, ref)
 }
@@ -410,7 +480,7 @@ export function lucroDoMesBreakdown(
 
   for (const v of vendasMes) {
     const veic = veiculos.find((x) => x.id === v.veiculo_id)
-    const lucro = calcularLucroVenda(v, veic, despesas)
+    const lucro = calcularLucroVenda(v, veic, despesas, vendas)
     realizadoVeiculos += lucro
 
     const funding = veic ? fundingPorVeiculo?.get(veic.id) : undefined
@@ -478,7 +548,7 @@ export function lucroDoAnoBreakdown(
 
   for (const v of vendasAno) {
     const veic = veiculos.find((x) => x.id === v.veiculo_id)
-    const lucro = calcularLucroVenda(v, veic, despesas)
+    const lucro = calcularLucroVenda(v, veic, despesas, vendas)
     realizadoVeiculos += lucro
 
     const funding = veic ? fundingPorVeiculo?.get(veic.id) : undefined
@@ -535,7 +605,10 @@ export function vendidosNoMes(vendas: Venda[], ref: Date): number {
 export function ticketMedioDoMes(vendas: Venda[], ref: Date): number {
   const doMes = vendas.filter((v) => dentroDoMes(v.data, ref))
   if (doMes.length === 0) return 0
-  return doMes.reduce((acc, v) => acc + v.valor_venda, 0) / doMes.length
+  return (
+    doMes.reduce((acc, v) => acc + receitaRealizadaDaVenda(v), 0) /
+    doMes.length
+  )
 }
 
 export function roiMedioDoMes(
@@ -586,6 +659,7 @@ export function distribuicaoEstoque(
 ): { status: StatusVeiculo; total: number }[] {
   const base: StatusVeiculo[] = [
     'em preparação',
+    'mecânico',
     'disponível',
     'reservado',
     'vendido',
@@ -895,33 +969,42 @@ export function ultimasMovimentacoes(
     return `${v.marca} ${v.modelo} (${v.placa})`
   }
 
-  const vendasMov: Movimentacao[] = vendas.map((v) => ({
-    id: `venda-${v.id}`,
-    tipo: 'venda',
-    descricao: `Venda — ${descreverVeiculo(v.veiculo_id)}`,
-    data: v.data,
-    valor: v.valor_venda,
-    sinal: 'entrada',
-  }))
+  const vendasMov: Movimentacao[] = vendas.map((v) => {
+    const caixa = valorCaixaDaVenda(v)
+    const temTroca = (Number(v.valor_troca) || 0) > 0
+    return {
+      id: `venda-${v.id}`,
+      tipo: 'venda' as const,
+      descricao: temTroca
+        ? `Venda — ${descreverVeiculo(v.veiculo_id)} (caixa: dinheiro; troca no estoque)`
+        : `Venda — ${descreverVeiculo(v.veiculo_id)}`,
+      data: v.data,
+      valor: caixa,
+      sinal: 'entrada' as const,
+    }
+  })
 
-  const comprasMov: Movimentacao[] = compras.map((c) => ({
-    id: `compra-${c.id}`,
-    tipo: 'compra',
-    descricao: `Compra — ${descreverVeiculo(c.veiculo_id)}`,
-    data: c.data,
-    valor: c.valor_pago,
-    sinal: 'saida',
-  }))
+  // Compra por troca não é saída de caixa — o bem já entrou como ativo.
+  const comprasMov: Movimentacao[] = compras
+    .filter((c) => c.origem !== 'troca')
+    .map((c) => ({
+      id: `compra-${c.id}`,
+      tipo: 'compra' as const,
+      descricao: `Compra — ${descreverVeiculo(c.veiculo_id)}`,
+      data: c.data,
+      valor: c.valor_pago,
+      sinal: 'saida' as const,
+    }))
 
   const despesasMov: Movimentacao[] = despesas.map((d) => ({
     id: `despesa-${d.id}`,
-    tipo: 'despesa',
+    tipo: 'despesa' as const,
     descricao: d.pago_por
       ? `Despesa — ${d.descricao} (pago por ${d.pago_por})`
       : `Despesa — ${d.descricao}`,
     data: d.data,
     valor: d.valor,
-    sinal: 'saida',
+    sinal: 'saida' as const,
   }))
 
   return [...vendasMov, ...comprasMov, ...despesasMov]

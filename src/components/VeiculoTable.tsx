@@ -1,15 +1,23 @@
-import { Pencil, Tag, Trash2 } from 'lucide-react'
-import type { Veiculo } from '@/types'
+import { Megaphone, Pencil, Tag, Trash2 } from 'lucide-react'
+import type { Veiculo, Venda } from '@/types'
 import type { ResumoFinanceiroVeiculo } from '@/utils/calculos'
 import { StatusBadge } from './Badge'
+import {
+  TrocaNaVendaInfo,
+  TrocaOrigemEstoqueInfo,
+} from './TrocaVeiculoInfo'
 import { formatarMoeda, formatarNumero, formatarPercentual } from '@/utils/formatadores'
 
 interface Props {
   veiculos: Veiculo[]
   resumosPorId: Record<string, ResumoFinanceiroVeiculo>
+  vendasPorVeiculoId: Record<string, Venda | undefined>
+  veiculosPorId: Record<string, Veiculo | undefined>
+  vendasOrigemTrocaPorId: Record<string, Venda | undefined>
   onEditar: (v: Veiculo) => void
   onExcluir: (v: Veiculo) => void
   onRegistrarVenda: (v: Veiculo) => void
+  onGerarAnuncio: (v: Veiculo) => void
 }
 
 function classesLucro(valor: number): string {
@@ -27,9 +35,13 @@ function classesMargem(margem: number): string {
 export function VeiculoTable({
   veiculos,
   resumosPorId,
+  vendasPorVeiculoId,
+  veiculosPorId,
+  vendasOrigemTrocaPorId,
   onEditar,
   onExcluir,
   onRegistrarVenda,
+  onGerarAnuncio,
 }: Props) {
   return (
     <div className="card overflow-x-auto">
@@ -55,6 +67,8 @@ export function VeiculoTable({
             const margem = resumo?.margemPercentual ?? 0
             const lucro = resumo?.lucroLiquido ?? 0
             const podeVender = v.status === 'disponível'
+            const venda = vendasPorVeiculoId[v.id]
+            const vendaOrigemTroca = vendasOrigemTrocaPorId[v.id]
             return (
               <tr
                 key={v.id}
@@ -84,6 +98,19 @@ export function VeiculoTable({
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
                     {v.modelo}
                   </p>
+                  <TrocaNaVendaInfo
+                    venda={venda}
+                    veiculosPorId={veiculosPorId}
+                    variant="compact"
+                  />
+                  {vendaOrigemTroca && (
+                    <TrocaOrigemEstoqueInfo
+                      veiculo={v}
+                      vendaOrigem={vendaOrigemTroca}
+                      veiculoVendido={veiculosPorId[vendaOrigemTroca.veiculo_id]}
+                      variant="compact"
+                    />
+                  )}
                 </td>
                 <td className="tabular px-3 py-3">{v.ano}</td>
                 <td className="tabular px-3 py-3 text-right">
@@ -138,6 +165,15 @@ export function VeiculoTable({
                       className="btn-press grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.08]"
                     >
                       <Pencil size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onGerarAnuncio(v)}
+                      title="Gerar anúncio"
+                      aria-label={`Gerar anúncio de ${v.placa}`}
+                      className="btn-press grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-primary/15 hover:text-primary dark:text-zinc-300"
+                    >
+                      <Megaphone size={14} />
                     </button>
                     <button
                       type="button"

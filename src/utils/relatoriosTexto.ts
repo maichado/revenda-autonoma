@@ -18,11 +18,17 @@ import type {
   Veiculo,
   Venda,
 } from '@/types'
-import { totalEmEstoque } from './calculos'
+import {
+  calcularLucroVenda,
+  receitaRealizadaDaVenda,
+  totalEmEstoque,
+} from './calculos'
 import {
   calcularDadosVeiculoIndividual,
+  calcularGanhoEstoque,
   calcularIndicadoresDestaque,
   calcularLinhasVeiculos,
+  calcularRelatorioGanhoMeia,
   calcularResumoFinanceiro,
   calcularValorEstoque,
   filtrarDespesasRelatorio,
@@ -38,6 +44,12 @@ import {
   type DadosVeiculoIndividual,
   type Periodo,
 } from './relatorios'
+import {
+  composicaoVendaTroca,
+  linhasTextoTroca,
+  resumirTrocasPeriodo,
+  vendaOrigemDaTroca,
+} from './trocaVenda'
 
 const LIMITE_LISTA = 20
 const LIMITE_LISTA_DESPESAS = 10
@@ -139,14 +151,43 @@ export function gerarTextoRelatorioGeral(
     linhasTexto.push('❌ Nenhuma venda registrada neste período.')
   } else {
     linhasTexto.push(
-      `✅ ${resumo.qtdVendas} ${resumo.qtdVendas === 1 ? 'venda' : 'vendas'} · Receita ${formatarMoedaBR(resumo.receita)} · Lucro ${formatarMoedaBR(resumo.lucro)}`,
+      `✅ ${resumo.qtdVendas} ${resumo.qtdVendas === 1 ? 'venda' : 'vendas'} · Receita (dinheiro) ${formatarMoedaBR(resumo.receita)} · Lucro ${formatarMoedaBR(resumo.lucro)}`,
     )
   }
   linhasTexto.push('')
 
+  const veiculosPorIdGeral: Record<string, Veiculo | undefined> = {}
+  for (const v of veiculos) veiculosPorIdGeral[v.id] = v
+  const vendasPeriodoGeral = filtrarPorPeriodo(
+    vendas,
+    periodo.dataInicio,
+    periodo.dataFim,
+    (v) => v.data,
+  )
+  const trocasGeral = resumirTrocasPeriodo(vendasPeriodoGeral, veiculosPorIdGeral)
+  if (trocasGeral.quantidade > 0) {
+    linhasTexto.push('🔄 *TROCAS NO PERÍODO*')
+    linhasTexto.push(
+      `${trocasGeral.quantidade} negócio(s) · Dinheiro ${formatarMoedaBR(trocasGeral.dinheiro)} · Trocas (estoque) ${formatarMoedaBR(trocasGeral.valorTrocas)} · Negócios ${formatarMoedaBR(trocasGeral.negocioTotal)}`,
+    )
+    for (const c of trocasGeral.composicoes.slice(0, LIMITE_LISTA)) {
+      const vendido = veiculosPorIdGeral[c.venda.veiculo_id]
+      const placa = vendido?.placa ?? '—'
+      linhasTexto.push(
+        `• ${formatarDataCurtaBR(c.venda.data)} · ${placa} · ${formatarMoedaBR(c.dinheiro)} + troca ${formatarMoedaBR(c.valorTroca)} = ${formatarMoedaBR(c.total)}`,
+      )
+      for (const linha of linhasTextoTroca(c, formatarMoedaBR)) {
+        if (!linha.startsWith('🔄')) linhasTexto.push(linha)
+      }
+    }
+    linhasTexto.push('')
+  }
+
   // Resumo financeiro do período
   linhasTexto.push('💰 *Resumo financeiro do período*')
-  linhasTexto.push(`💰 *Receita:* ${formatarMoedaBR(resumo.receita)}`)
+  linhasTexto.push(
+    `💰 *Receita (dinheiro):* ${formatarMoedaBR(resumo.receita)}`,
+  )
   linhasTexto.push(
     `🧾 *Custos (compra + despesas):* ${formatarMoedaBR(resumo.custoTotal)}`,
   )
@@ -342,11 +383,22 @@ export function gerarTextoRelatorioVendas(
   out.push(`🗓 Período: ${rotuloCurtoPeriodo(periodo)}`)
   out.push('')
   out.push(`🔢 Quantidade: *${vendasPeriodo.length}*`)
-  out.push(`💰 Receita: *${formatarMoedaBR(resumo.receita)}*`)
+  out.push(`💰 Receita (dinheiro): *${formatarMoedaBR(resumo.receita)}*`)
   out.push(`✅ Lucro: *${formatarMoedaBR(resumo.lucro)}*`)
   out.push(`📊 Ticket médio: *${formatarMoedaBR(ticket)}*`)
   out.push(`📈 Margem média: *${formatarPercentualBR(resumo.margem, 1)}*`)
   out.push('')
+
+  const veiculosPorId: Record<string, Veiculo | undefined> = {}
+  for (const x of veiculos) veiculosPorId[x.id] = x
+  const trocas = resumirTrocasPeriodo(vendasPeriodo, veiculosPorId)
+  if (trocas.quantidade > 0) {
+    out.push('🔄 *Trocas no período*')
+    out.push(
+      `${trocas.quantidade} · Dinheiro ${formatarMoedaBR(trocas.dinheiro)} · Em estoque (trocas) ${formatarMoedaBR(trocas.valorTrocas)} · Negócios ${formatarMoedaBR(trocas.negocioTotal)}`,
+    )
+    out.push('')
+  }
 
   if (vendasPeriodo.length === 0) {
     out.push('_Nenhuma venda registrada no período._')
@@ -354,18 +406,19 @@ export function gerarTextoRelatorioVendas(
     out.push('*Vendas do período:*')
     const limitada = vendasPeriodo.slice(0, LIMITE_LISTA)
     for (const v of limitada) {
-      const veic = veiculos.find((x) => x.id === v.veiculo_id)
+      const veic = veiculosPorId[v.veiculo_id]
       const placa = veic?.placa ?? '—'
-      // Lucro por venda: valor_venda − valor_compra − despesas vinculadas
-      const despesasVinc = despesas
-        .filter((d) => d.veiculo_id === v.veiculo_id)
-        .reduce((acc, d) => acc + d.valor, 0)
-      const lucroVenda = veic
-        ? v.valor_venda - veic.valor_compra - despesasVinc
-        : 0
+      const dinheiro = receitaRealizadaDaVenda(v)
+      const lucroVenda = calcularLucroVenda(v, veic, despesas, vendas)
+      const comp = composicaoVendaTroca(v, veiculosPorId)
       out.push(
-        `${formatarDataCurtaBR(v.data)} · ${placa} · ${trunc(v.comprador_nome || '—', 16)} · ${formatarMoedaBR(v.valor_venda)} · ${v.forma_recebimento || '—'} · lucro ${formatarMoedaBR(lucroVenda)}`,
+        `${formatarDataCurtaBR(v.data)} · ${placa} · ${trunc(v.comprador_nome || '—', 16)} · ${formatarMoedaBR(dinheiro)} dinheiro · ${v.forma_recebimento || '—'} · lucro ${formatarMoedaBR(lucroVenda)}`,
       )
+      if (comp) {
+        for (const linha of linhasTextoTroca(comp, formatarMoedaBR)) {
+          out.push(linha)
+        }
+      }
     }
     const restante = vendasPeriodo.length - limitada.length
     if (restante > 0) {
@@ -489,16 +542,46 @@ export function gerarTextoRelatorioVeiculoIndividual(
 
   if (venda) {
     out.push('🤝 *Venda*')
+    const dinheiro = receitaRealizadaDaVenda(venda)
     out.push(
-      `${formatarDataBR(venda.data)} · ${formatarMoedaBR(venda.valor_venda)} · ${venda.forma_recebimento || '—'} · ${trunc(venda.comprador_nome || '—', 24)}`,
+      `${formatarDataBR(venda.data)} · ${formatarMoedaBR(dinheiro)} dinheiro · ${venda.forma_recebimento || '—'} · ${trunc(venda.comprador_nome || '—', 24)}`,
     )
+    const mapV: Record<string, Veiculo | undefined> = {}
+    for (const x of estado.veiculos) mapV[x.id] = x
+    const comp = composicaoVendaTroca(venda, mapV)
+    if (comp) {
+      for (const linha of linhasTextoTroca(comp, formatarMoedaBR)) {
+        out.push(linha)
+      }
+    }
+    const origem = vendaOrigemDaTroca(veiculo.id, estado.vendas)
+    if (origem) {
+      const vendido = estado.veiculos.find((x) => x.id === origem.veiculo_id)
+      out.push(
+        `🔄 Relação de troca: ${veiculo.marca} ${veiculo.modelo} ↔ ${vendido ? `${vendido.marca} ${vendido.modelo} (${vendido.placa})` : 'veículo de origem'}`,
+      )
+      out.push(
+        `_Entrou na venda do ${vendido?.placa || 'veículo'} · custo de aquisição = R$ 0_`,
+      )
+    }
     out.push(
-      `✅ Lucro: ${formatarMoedaBR(lucro)} (ROI ${formatarPercentualBR(roi, 1)})`,
+      `✅ Lucro realizado: ${formatarMoedaBR(lucro)} (ROI ${formatarPercentualBR(roi, 1)})`,
     )
     out.push(`⏱ ${diasEmEstoque} dias em estoque`)
   } else {
     out.push('🤝 *Venda*')
-    out.push('_Veículo ainda não vendido._')
+    const origem = vendaOrigemDaTroca(veiculo.id, estado.vendas)
+    if (origem) {
+      const vendido = estado.veiculos.find((x) => x.id === origem.veiculo_id)
+      out.push(
+        `🔄 Entrou por troca na venda do ${vendido ? `${vendido.marca} ${vendido.modelo} (${vendido.placa})` : 'veículo'}`,
+      )
+      out.push(
+        `Dinheiro daquela venda: ${formatarMoedaBR(Number(origem.entrada) || 0)} · este bem ainda no estoque`,
+      )
+    } else {
+      out.push('_Veículo ainda não vendido._')
+    }
   }
 
   out.push(assinatura(nome))
@@ -515,8 +598,97 @@ export const TIPOS_RELATORIO = [
   'compras',
   'vendas',
   'despesas',
+  'ganho-meia',
+  'ganho-meus',
 ] as const
 export type TipoRelatorio = (typeof TIPOS_RELATORIO)[number]
+
+export function gerarTextoRelatorioGanhoEstoque(
+  estado: EstadoRelatorio,
+  escopo: 'meia' | 'meus',
+): string {
+  const { veiculos, despesas, configuracoes } = estado
+  const nome = configuracoes.nome_revenda || NOME_REVENDA_PADRAO
+  const out: string[] = []
+
+  if (escopo === 'meia') {
+    const meia = calcularRelatorioGanhoMeia(
+      veiculos,
+      estado.vendas,
+      despesas,
+      configuracoes,
+    )
+    const pc = meia.potencialComCaixa
+    const dono = meia.nomeDono || 'Você'
+    const socio = meia.nomeSocio || 'Sócio'
+    const qtdEstoque = meia.potencial.qtd
+
+    out.push(`🤝 *A meia — ${nome}*`)
+    out.push('')
+    out.push('━━━━━━━━━━━━━━')
+    out.push('💵 *CAIXA REVENDA*')
+    out.push('━━━━━━━━━━━━━━')
+    out.push(`Em caixa: *${formatarMoedaBR(meia.caixa.saldo)}*`)
+    out.push(`👤 ${dono}: *${formatarMoedaBR(meia.caixa.parteDono)}*`)
+    out.push(`🤝 ${socio}: *${formatarMoedaBR(meia.caixa.parteSocio)}*`)
+    out.push('')
+    out.push('━━━━━━━━━━━━━━')
+    out.push('📈 *POTENCIAL*')
+    out.push('━━━━━━━━━━━━━━')
+    out.push(`Caixa: *${formatarMoedaBR(pc.emCaixa)}*`)
+    out.push(
+      `Valor colocado no negócio: *${formatarMoedaBR(pc.valorColocado)}*`,
+    )
+    out.push(
+      `Vai vender (${qtdEstoque} ${qtdEstoque === 1 ? 'carro' : 'carros'}): *${formatarMoedaBR(pc.vendaPretendida)}*`,
+    )
+    out.push(`*Total: ${formatarMoedaBR(pc.total)}*`)
+    out.push('')
+    out.push(`👤 ${dono}: *${formatarMoedaBR(pc.parteDono)}*`)
+    out.push(`🤝 ${socio}: *${formatarMoedaBR(pc.parteSocio)}*`)
+    out.push('')
+    out.push('_Caixa + venda pretendida · 50/50_')
+    out.push(assinatura(nome))
+    return out.join('\n')
+  }
+
+  const resumo = calcularGanhoEstoque(veiculos, despesas, escopo)
+  out.push(`👤 *Ganho potencial — Meus — ${nome}*`)
+  out.push('🗓 Estoque atual (independente do período)')
+  out.push('')
+  out.push(`🔢 Em estoque: *${resumo.qtd}*`)
+  out.push(`💸 Investido: *${formatarMoedaBR(resumo.investido)}*`)
+  out.push(
+    `🏷 Venda pretendida: *${formatarMoedaBR(resumo.vendaPretendida)}*`,
+  )
+  out.push(`📈 Ganho bruto: *${formatarMoedaBR(resumo.ganhoBruto)}*`)
+  out.push(`✅ Seu ganho (100%): *${formatarMoedaBR(resumo.ganhoMeu)}*`)
+  out.push('')
+
+  if (resumo.linhas.length === 0) {
+    out.push('_Nenhum veículo 100% seu em estoque._')
+  } else {
+    out.push('*Veículos:*')
+    for (const l of resumo.linhas.slice(0, LIMITE_LISTA)) {
+      const v = l.veiculo
+      out.push(
+        `${v.placa} · ${trunc(`${v.marca} ${v.modelo}`, 20)} · pret. ${formatarMoedaBR(l.vendaPretendida)} · ganho ${formatarMoedaBR(l.ganhoBruto)}`,
+      )
+    }
+    const restante =
+      resumo.linhas.length - Math.min(resumo.linhas.length, LIMITE_LISTA)
+    if (restante > 0) {
+      out.push(`_+${restante} veículo(s) não exibido(s)._`)
+    }
+  }
+
+  out.push('')
+  out.push(
+    '_Projeção: pretendido − (compra + despesas do carro). Só se concretiza na venda._',
+  )
+  out.push(assinatura(nome))
+  return out.join('\n')
+}
 
 export function gerarTextoRelatorio(
   tipo: TipoRelatorio,
@@ -524,6 +696,13 @@ export function gerarTextoRelatorio(
   periodo: Periodo,
   veiculoId?: string,
 ): string {
+  if (tipo === 'ganho-meia') {
+    return gerarTextoRelatorioGanhoEstoque(estado, 'meia')
+  }
+  if (tipo === 'ganho-meus') {
+    return gerarTextoRelatorioGanhoEstoque(estado, 'meus')
+  }
+
   if (veiculoId && (tipo === 'geral' || tipo === 'veiculos')) {
     const dados = calcularDadosVeiculoIndividual(
       veiculoId,
@@ -576,5 +755,9 @@ export function slugRelatorio(tipo: TipoRelatorio): string {
       return 'vendas'
     case 'despesas':
       return 'despesas'
+    case 'ganho-meia':
+      return 'ganho-meia'
+    case 'ganho-meus':
+      return 'ganho-meus'
   }
 }

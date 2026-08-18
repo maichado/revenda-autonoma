@@ -12,7 +12,16 @@ import { CircleDollarSign, PiggyBank, Tags } from 'lucide-react'
 
 import { KpiCard } from './KpiCard'
 import { RelatorioLayout } from './RelatorioLayout'
-import { calcularLucroVenda } from '@/utils/calculos'
+import {
+  PainelTrocasRelatorio,
+  RelacaoOrigemTrocaInfo,
+  TrocaNaVendaInfo,
+} from './TrocaVeiculoInfo'
+import {
+  calcularLucroVenda,
+  receitaRealizadaDaVenda,
+} from '@/utils/calculos'
+import { resumirTrocasPeriodo } from '@/utils/trocaVenda'
 import {
   calcularResumoFinanceiro,
   filtrarPorPeriodo,
@@ -95,11 +104,16 @@ export function RelatorioVendas({ estado, periodo, veiculoId }: Props) {
     return map
   }, [veiculos])
 
+  const resumoTrocas = useMemo(
+    () => resumirTrocasPeriodo(vendasPeriodo, veiculosPorId),
+    [vendasPeriodo, veiculosPorId],
+  )
+
   return (
     <RelatorioLayout
       titulo="Relatório de Vendas"
       periodoLabel={labelPeriodo(periodo)}
-      descricao="Vendas do período — totais, lucro real e listagem."
+      descricao="Vendas do período — dinheiro realizado, trocas e listagem detalhada."
       slug="vendas"
       texto={texto}
       visual={
@@ -111,9 +125,16 @@ export function RelatorioVendas({ estado, periodo, veiculoId }: Props) {
               icone={<Tags size={16} />}
             />
             <KpiCard
-              titulo="Receita"
+              titulo="Receita (dinheiro)"
               valor={formatarMoedaBR(resumo.receita)}
               icone={<CircleDollarSign size={16} />}
+              detalhe={
+                resumoTrocas.quantidade > 0 ? (
+                  <span className="text-[11px] text-zinc-500">
+                    Só caixa — trocas no estoque à parte
+                  </span>
+                ) : undefined
+              }
             />
             <KpiCard
               titulo="Lucro"
@@ -126,6 +147,11 @@ export function RelatorioVendas({ estado, periodo, veiculoId }: Props) {
               icone={<CircleDollarSign size={16} />}
             />
           </section>
+
+          <PainelTrocasRelatorio
+            resumo={resumoTrocas}
+            veiculosPorId={veiculosPorId}
+          />
 
           {distFormas.length > 0 && (
             <section className="card p-4 sm:p-5">
@@ -190,14 +216,16 @@ export function RelatorioVendas({ estado, periodo, veiculoId }: Props) {
           )}
 
           <section className="card overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[860px] text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                   <th className="px-3 py-2 font-medium">Data</th>
-                  <th className="px-3 py-2 font-medium">Placa</th>
+                  <th className="px-3 py-2 font-medium">Veículo / Troca</th>
                   <th className="px-3 py-2 font-medium">Comprador</th>
                   <th className="px-3 py-2 font-medium">Forma</th>
-                  <th className="px-3 py-2 text-right font-medium">Valor</th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    Dinheiro
+                  </th>
                   <th className="px-3 py-2 text-right font-medium">Lucro</th>
                   <th className="px-3 py-2 text-right font-medium">Margem</th>
                 </tr>
@@ -215,9 +243,11 @@ export function RelatorioVendas({ estado, periodo, veiculoId }: Props) {
                 ) : (
                   vendasPeriodo.slice(0, MAX_LINHAS_TABELA).map((v) => {
                     const veic = veiculosPorId[v.veiculo_id]
-                    const lucro = calcularLucroVenda(v, veic, despesas)
-                    const margem =
-                      v.valor_venda > 0 ? (lucro / v.valor_venda) * 100 : 0
+                    const lucro = calcularLucroVenda(v, veic, despesas, vendas)
+                    const receita = receitaRealizadaDaVenda(v)
+                    const margem = receita > 0 ? (lucro / receita) * 100 : 0
+                    const temTroca =
+                      (Number(v.valor_troca) || 0) > 0 || !!v.troca_veiculo_id
                     const corLucro =
                       lucro >= 0
                         ? 'text-emerald-600 dark:text-emerald-400'
@@ -227,24 +257,56 @@ export function RelatorioVendas({ estado, periodo, veiculoId }: Props) {
                         key={v.id}
                         className="border-t border-border-light dark:border-border-dark"
                       >
-                        <td className="tabular px-3 py-2">
+                        <td className="tabular px-3 py-2 align-top">
                           {formatarDataBR(v.data)}
                         </td>
-                        <td className="tabular px-3 py-2 font-semibold">
-                          {veic?.placa ?? '—'}
+                        <td className="px-3 py-2 align-top">
+                          <p className="tabular font-semibold">
+                            {veic?.placa ?? '—'}
+                          </p>
+                          {veic && (
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                              {veic.marca} {veic.modelo}
+                            </p>
+                          )}
+                          {veic && (
+                            <RelacaoOrigemTrocaInfo
+                              veiculo={veic}
+                              vendas={vendas}
+                              veiculosPorId={veiculosPorId}
+                              variant="compact"
+                            />
+                          )}
+                          {temTroca && (
+                            <TrocaNaVendaInfo
+                              venda={v}
+                              veiculosPorId={veiculosPorId}
+                              variant="compact"
+                            />
+                          )}
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 align-top">
                           {v.comprador_nome || '—'}
                         </td>
-                        <td className="px-3 py-2 capitalize">
+                        <td className="px-3 py-2 align-top capitalize">
                           {v.forma_recebimento || '—'}
+                          {temTroca && (
+                            <span className="mt-1 block text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                              + troca
+                            </span>
+                          )}
                         </td>
-                        <td className="tabular px-3 py-2 text-right font-semibold">
-                          {formatarMoedaBR(v.valor_venda)}
+                        <td className="tabular px-3 py-2 text-right align-top font-semibold">
+                          <div>{formatarMoedaBR(receita)}</div>
+                          {temTroca && (
+                            <div className="text-[10px] font-normal text-zinc-500 dark:text-zinc-400">
+                              negócio {formatarMoedaBR(v.valor_venda)}
+                            </div>
+                          )}
                         </td>
                         <td
                           className={[
-                            'tabular px-3 py-2 text-right font-semibold',
+                            'tabular px-3 py-2 text-right align-top font-semibold',
                             corLucro,
                           ].join(' ')}
                         >
@@ -252,7 +314,7 @@ export function RelatorioVendas({ estado, periodo, veiculoId }: Props) {
                         </td>
                         <td
                           className={[
-                            'tabular px-3 py-2 text-right',
+                            'tabular px-3 py-2 text-right align-top',
                             corLucro,
                           ].join(' ')}
                         >

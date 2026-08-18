@@ -4,9 +4,23 @@
 
 export type StatusVeiculo =
   | 'em preparação'
+  | 'mecânico'
   | 'disponível'
   | 'reservado'
   | 'vendido'
+
+export const STATUS_VEICULO: StatusVeiculo[] = [
+  'em preparação',
+  'mecânico',
+  'disponível',
+  'reservado',
+  'vendido',
+]
+
+/** Tipo de bem no estoque — carro (padrão) ou moto (ex.: entrada em troca). */
+export type CategoriaVeiculo = 'carro' | 'moto'
+
+export const CATEGORIAS_VEICULO: CategoriaVeiculo[] = ['carro', 'moto']
 
 // Propriedade do veículo: "solo" = 100% seu; "meia" = dividido 50/50 com um
 // sócio. Impacta a divisão do lucro (Dashboard, Relatórios, Header): a SUA
@@ -64,17 +78,25 @@ export const FORMAS_RECEBIMENTO_VENDA: FormaRecebimentoVenda[] = [
 // Origens canônicas das compras (de novo, mantemos o campo como string em
 // Compra.origem para tolerar dados legados/seed; o formulário/filtro do
 // módulo restringe-se a estas opções).
-export type OrigemCompra = 'leilão' | 'particular' | 'loja' | 'pré-leilão'
+export type OrigemCompra =
+  | 'leilão'
+  | 'particular'
+  | 'loja'
+  | 'pré-leilão'
+  | 'troca'
 
 export const ORIGENS_COMPRA: OrigemCompra[] = [
   'leilão',
   'particular',
   'loja',
   'pré-leilão',
+  'troca',
 ]
 
 export interface Veiculo {
   id: string
+  /** Carro (default) ou moto — usado em troca na venda e no estoque. */
+  categoria?: CategoriaVeiculo
   placa: string
   marca: string
   modelo: string
@@ -118,6 +140,8 @@ export interface Veiculo {
   /** Metade do valor pessoal informado é do sócio (só sua metade entra a devolver). */
   compra_funding_pessoal_meia_socio?: boolean
   observacoes: string
+  /** Opcionais/acessórios para anúncio e cadastro (ex.: ar, ABS, multimídia). */
+  acessorios?: string[]
   fotos: string[]
   despesas_vinculadas: string[]
 }
@@ -143,11 +167,44 @@ export interface Venda {
   comprador_nome: string
   comprador_cpf?: string
   comprador_contato: string
+  /**
+   * Valor total do negócio.
+   * Com troca: entrada (dinheiro) + valor_troca = valor_venda.
+   */
   valor_venda: number
   forma_recebimento: FormaPagamento
+  /**
+   * Dinheiro pago na entrada. Em venda com troca, compõe o total:
+   * entrada + valor_troca = valor_venda.
+   */
   entrada?: number
   parcelas?: number
   observacoes: string
+  /**
+   * Veículo/moto que entrou no negócio como troca e foi para o estoque.
+   * Preenchido ao registrar a venda com a opção de troca.
+   */
+  troca_veiculo_id?: string
+  /**
+   * Valor do bem recebido na troca.
+   * Com troca: entrada + valor_troca = valor_venda (e custo no estoque).
+   */
+  valor_troca?: number
+}
+
+/** Dados do bem recebido na troca — usados só no cadastro da venda. */
+export interface TrocaNaVendaInput {
+  categoria: CategoriaVeiculo
+  placa: string
+  marca: string
+  modelo: string
+  ano: number
+  cor: string
+  quilometragem: number
+  /** Valor avaliado / abatido no negócio (= valor_compra no estoque). */
+  valor_avaliado: number
+  observacoes?: string
+  fotos: string[]
 }
 
 // Tipos canônicos do módulo Despesas (spec). A migração v3 → v4 do store

@@ -292,6 +292,9 @@ function normalizarEstadoBackup(
         : 'solo') as TipoPropriedade,
       socio_parceiro: v.socio_parceiro ? String(v.socio_parceiro) : undefined,
       observacoes: String(v.observacoes ?? ''),
+      acessorios: Array.isArray(v.acessorios)
+        ? v.acessorios.map((a) => String(a).trim()).filter(Boolean)
+        : [],
       fotos: Array.isArray(v.fotos) ? v.fotos : [],
       despesas_vinculadas: Array.isArray(v.despesas_vinculadas)
         ? v.despesas_vinculadas.filter((dId) => despesaIds.has(dId))

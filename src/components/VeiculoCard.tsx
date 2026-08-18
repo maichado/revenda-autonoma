@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Car,
   Gauge,
+  Megaphone,
   MoreVertical,
   Pencil,
   Tag,
@@ -11,7 +11,12 @@ import {
 import type { Veiculo, Venda } from '@/types'
 import type { ResumoFinanceiroVeiculo } from '@/utils/calculos'
 import { StatusBadge } from './Badge'
+import { FotoCarrossel } from './FotoCarrossel'
 import { TempoEstoqueResumo } from './TempoEstoqueResumo'
+import {
+  TrocaNaVendaInfo,
+  TrocaOrigemEstoqueInfo,
+} from './TrocaVeiculoInfo'
 import { formatarMoeda, formatarPercentual } from '@/utils/formatadores'
 import { calcularMetricasTempoVeiculo } from '@/utils/tempoVeiculo'
 
@@ -19,9 +24,14 @@ interface Props {
   veiculo: Veiculo
   resumo: ResumoFinanceiroVeiculo
   venda?: Venda
+  /** Mapa de veículos — resolve o bem da troca (ex.: BIZ) no card do vendido. */
+  veiculosPorId: Record<string, Veiculo | undefined>
+  /** Se este veículo entrou por troca, a venda de origem (ex.: venda do Uno). */
+  vendaOrigemTroca?: Venda
   onEditar: () => void
   onExcluir: () => void
   onRegistrarVenda: () => void
+  onGerarAnuncio: () => void
 }
 
 function classesLucro(valor: number): string {
@@ -41,9 +51,12 @@ export function VeiculoCard({
   veiculo,
   resumo,
   venda,
+  veiculosPorId,
+  vendaOrigemTroca,
   onEditar,
   onExcluir,
   onRegistrarVenda,
+  onGerarAnuncio,
 }: Props) {
   const [menuAberto, setMenuAberto] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -59,7 +72,6 @@ export function VeiculoCard({
     return () => document.removeEventListener('mousedown', onClick)
   }, [menuAberto])
 
-  const fotoCapa = veiculo.fotos[0]
   const podeVender = veiculo.status === 'disponível'
   const metricasTempo = calcularMetricasTempoVeiculo(veiculo, venda)
 
@@ -70,27 +82,19 @@ export function VeiculoCard({
         'transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-card-dark',
       ].join(' ')}
     >
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-zinc-100 dark:bg-white/[0.04]">
-        {fotoCapa ? (
-          <img
-            src={fotoCapa}
-            alt={`${veiculo.marca} ${veiculo.modelo} — ${veiculo.placa}`}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-          />
-        ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-600">
-            <Car size={40} strokeWidth={1.25} />
-            <span className="text-[11px] uppercase tracking-wide">
-              Sem foto
-            </span>
-          </div>
-        )}
+      <div className="relative">
+        <FotoCarrossel
+          fotos={veiculo.fotos ?? []}
+          alt={`${veiculo.marca} ${veiculo.modelo} — ${veiculo.placa}`}
+        />
 
-        <div className="absolute left-3 top-3">
-          <StatusBadge status={veiculo.status} />
+        <div className="pointer-events-none absolute left-3 top-3 z-[2]">
+          <div className="pointer-events-auto">
+            <StatusBadge status={veiculo.status} />
+          </div>
         </div>
 
-        <div ref={menuRef} className="absolute right-2 top-2">
+        <div ref={menuRef} className="absolute right-2 top-2 z-[2]">
           <button
             type="button"
             onClick={(e) => {
@@ -132,6 +136,17 @@ export function VeiculoCard({
               <button
                 role="menuitem"
                 type="button"
+                onClick={() => {
+                  setMenuAberto(false)
+                  onGerarAnuncio()
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-white/[0.06]"
+              >
+                <Megaphone size={14} /> Gerar anúncio
+              </button>
+              <button
+                role="menuitem"
+                type="button"
                 disabled={!podeVender}
                 onClick={() => {
                   setMenuAberto(false)
@@ -164,9 +179,16 @@ export function VeiculoCard({
 
       <div className="flex flex-1 flex-col gap-2 p-4">
         <div className="flex items-start justify-between gap-2">
-          <span className="tabular rounded-md border border-border-light bg-zinc-50 px-2 py-0.5 text-xs font-semibold tracking-wider text-zinc-700 dark:border-border-dark dark:bg-white/[0.06] dark:text-zinc-200">
-            {veiculo.placa}
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="tabular rounded-md border border-border-light bg-zinc-50 px-2 py-0.5 text-xs font-semibold tracking-wider text-zinc-700 dark:border-border-dark dark:bg-white/[0.06] dark:text-zinc-200">
+              {veiculo.placa}
+            </span>
+            {veiculo.categoria === 'moto' && (
+              <span className="badge bg-sky-500/15 text-sky-700 dark:text-sky-300">
+                Moto
+              </span>
+            )}
+          </div>
           <span className="tabular text-[11px] text-zinc-500 dark:text-zinc-400">
             {veiculo.ano} • {veiculo.cor}
           </span>
@@ -196,11 +218,31 @@ export function VeiculoCard({
 
         <TempoEstoqueResumo metricas={metricasTempo} className="mt-1" />
 
+        {venda && (
+          <TrocaNaVendaInfo
+            venda={venda}
+            veiculosPorId={veiculosPorId}
+            variant="card"
+          />
+        )}
+
+        {vendaOrigemTroca && (
+          <TrocaOrigemEstoqueInfo
+            veiculo={veiculo}
+            vendaOrigem={vendaOrigemTroca}
+            veiculoVendido={veiculosPorId[vendaOrigemTroca.veiculo_id]}
+            variant="card"
+          />
+        )}
+
         <div className="mt-auto space-y-2 border-t border-border-light pt-2 dark:border-border-dark">
           <div className="flex items-end justify-between gap-2">
             <div>
               <p className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 {resumo.rotuloVenda}
+                {venda && (Number(venda.valor_troca) || 0) > 0
+                  ? ' (dinheiro)'
+                  : ''}
               </p>
               <p className="tabular text-lg font-semibold tracking-tight">
                 {formatarMoeda(resumo.valorVenda)}

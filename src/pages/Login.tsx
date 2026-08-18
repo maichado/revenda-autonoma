@@ -126,18 +126,22 @@ export default function Login() {
 
   return (
     <div className="relative flex min-h-screen flex-col bg-bg-light p-4 dark:bg-bg-dark">
-      <div className="absolute right-4 top-4">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(200,169,110,0.14),_transparent_55%)] dark:bg-[radial-gradient(ellipse_at_top,_rgba(200,169,110,0.1),_transparent_50%)]"
+      />
+      <div className="absolute right-4 top-4 z-10">
         <ThemeToggle />
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center">
-        <div className="card w-full max-w-md p-8 shadow-lg">
+      <div className="relative z-[1] flex flex-1 flex-col items-center justify-center">
+        <div className="material-heavy w-full max-w-md rounded-[22px] border border-black/[0.06] p-8 shadow-elevated animate-modal-in dark:border-white/[0.08] dark:shadow-elevated-dark">
           <div className="mb-6 flex justify-center">
             <LogoRevenda height={64} />
           </div>
 
           <div
-            className="mb-6 grid grid-cols-2 gap-1 rounded-lg border border-border-light bg-zinc-100/80 p-1 dark:border-border-dark dark:bg-white/[0.04]"
+            className="mb-6 grid grid-cols-2 gap-1 rounded-2xl bg-black/[0.04] p-1 dark:bg-white/[0.06]"
             role="tablist"
             aria-label="Entrar ou criar conta"
           >
@@ -146,9 +150,9 @@ export default function Login() {
               role="tab"
               aria-selected={!cadastro}
               className={[
-                'btn-press rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                'btn-press rounded-xl px-3 py-2 text-sm font-medium tracking-tight',
                 !cadastro
-                  ? 'bg-surface-light text-zinc-900 shadow-sm dark:bg-surface-dark dark:text-zinc-50'
+                  ? 'bg-surface-light text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50'
                   : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200',
               ].join(' ')}
               onClick={() => alternarModo('entrar')}
@@ -160,9 +164,9 @@ export default function Login() {
               role="tab"
               aria-selected={cadastro}
               className={[
-                'btn-press rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                'btn-press rounded-xl px-3 py-2 text-sm font-medium tracking-tight',
                 cadastro
-                  ? 'bg-surface-light text-zinc-900 shadow-sm dark:bg-surface-dark dark:text-zinc-50'
+                  ? 'bg-surface-light text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50'
                   : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200',
               ].join(' ')}
               onClick={() => alternarModo('cadastro')}
@@ -341,7 +345,7 @@ export default function Login() {
         </div>
       </div>
 
-      <footer className="py-4 text-center">
+      <footer className="relative z-[1] py-4 text-center">
         <AssinaturaAutor />
       </footer>
     </div>

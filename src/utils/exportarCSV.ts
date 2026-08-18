@@ -10,6 +10,7 @@ import type { Despesa, Veiculo, Venda } from '@/types'
 import {
   calcularLucroVenda,
   calcularROIVenda,
+  valorCaixaDaVenda,
 } from './calculos'
 import { formatarDataCurta } from './formatadores'
 
@@ -90,6 +91,8 @@ const CABECALHO_VENDAS = [
   'CPF',
   'Contato',
   'Valor Venda',
+  'Dinheiro (caixa)',
+  'Valor Troca',
   'Forma Recebimento',
   'Entrada',
   'Parcelas',
@@ -114,8 +117,8 @@ export function exportarVendasCSV(
 
   for (const venda of vendas) {
     const veic = veiculosPorId[venda.veiculo_id]
-    const lucro = calcularLucroVenda(venda, veic, despesas)
-    const roi = calcularROIVenda(venda, veic, despesas)
+    const lucro = calcularLucroVenda(venda, veic, despesas, vendas)
+    const roi = calcularROIVenda(venda, veic, despesas, vendas)
 
     linhas.push([
       formatarDataCurta(venda.data),
@@ -127,6 +130,8 @@ export function exportarVendasCSV(
       venda.comprador_cpf ?? '',
       venda.comprador_contato,
       formatarNumeroBR(venda.valor_venda),
+      formatarNumeroBR(valorCaixaDaVenda(venda)),
+      venda.valor_troca != null ? formatarNumeroBR(venda.valor_troca) : '',
       venda.forma_recebimento,
       venda.entrada != null ? formatarNumeroBR(venda.entrada) : '',
       venda.parcelas != null ? String(venda.parcelas) : '',

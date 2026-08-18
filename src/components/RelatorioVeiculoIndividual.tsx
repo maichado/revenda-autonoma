@@ -17,6 +17,11 @@ import { StatusBadge } from './Badge'
 import { KpiCard } from './KpiCard'
 import { RelatorioLayout } from './RelatorioLayout'
 import {
+  TrocaNaVendaInfo,
+  TrocaOrigemEstoqueInfo,
+} from './TrocaVeiculoInfo'
+import { vendaOrigemDaTroca } from '@/utils/trocaVenda'
+import {
   calcularDadosVeiculoIndividual,
   formatarDataBR,
   formatarMoedaBR,
@@ -219,24 +224,99 @@ export function RelatorioVeiculoIndividual({
             <Secao pdfSection="venda" titulo="Venda" icone={<Tags size={14} />}>
               <dl className="grid gap-2 text-sm sm:grid-cols-2">
                 <Item label="Data">{formatarDataBR(venda.data)}</Item>
-                <Item label="Valor">{formatarMoedaBR(venda.valor_venda)}</Item>
+                <Item
+                  label={
+                    (Number(venda.valor_troca) || 0) > 0
+                      ? 'Dinheiro (realizado)'
+                      : 'Valor'
+                  }
+                >
+                  {formatarMoedaBR(receita)}
+                </Item>
+                {(Number(venda.valor_troca) || 0) > 0 && (
+                  <>
+                    <Item label="Valor da troca">
+                      {formatarMoedaBR(Number(venda.valor_troca) || 0)}
+                    </Item>
+                    <Item label="Total do negócio">
+                      {formatarMoedaBR(venda.valor_venda)}
+                    </Item>
+                  </>
+                )}
                 <Item label="Forma">{venda.forma_recebimento || '—'}</Item>
                 <Item label="Comprador">{venda.comprador_nome || '—'}</Item>
               </dl>
+              {(Number(venda.valor_troca) || 0) > 0 && (
+                <div className="mt-3">
+                  <TrocaNaVendaInfo
+                    venda={venda}
+                    veiculosPorId={Object.fromEntries(
+                      estado.veiculos.map((v) => [v.id, v]),
+                    )}
+                    veiculoVendido={veiculo}
+                    variant="relatorio"
+                  />
+                </div>
+              )}
+              {(() => {
+                const origem = vendaOrigemDaTroca(veiculo.id, estado.vendas)
+                if (!origem) return null
+                const vendidoOrigem = estado.veiculos.find(
+                  (v) => v.id === origem.veiculo_id,
+                )
+                return (
+                  <div className="mt-3">
+                    <TrocaOrigemEstoqueInfo
+                      veiculo={veiculo}
+                      vendaOrigem={origem}
+                      veiculoVendido={vendidoOrigem}
+                      variant="card"
+                    />
+                  </div>
+                )
+              })()}
               <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2">
                 <TrendingUp size={14} className="text-emerald-600 dark:text-emerald-400" />
                 <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                  Lucro: {formatarMoedaBR(lucro)} (ROI{' '}
+                  Lucro realizado: {formatarMoedaBR(lucro)} (ROI{' '}
                   {formatarPercentualBR(roi, 1)})
+                  {(Number(venda.valor_troca) || 0) > 0
+                    ? ' — só sobre o dinheiro'
+                    : ''}
                 </span>
               </div>
             </Secao>
           ) : (
             <Secao pdfSection="venda" titulo="Venda" icone={<Tags size={14} />}>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                Veículo ainda não vendido — margem pretendida:{' '}
-                {formatarMoedaBR(veiculo.valor_venda_pretendido)}
-              </p>
+              {(() => {
+                const origem = vendaOrigemDaTroca(veiculo.id, estado.vendas)
+                if (origem) {
+                  const vendido = estado.veiculos.find(
+                    (v) => v.id === origem.veiculo_id,
+                  )
+                  return (
+                    <div className="space-y-3">
+                      <TrocaOrigemEstoqueInfo
+                        veiculo={veiculo}
+                        vendaOrigem={origem}
+                        veiculoVendido={vendido}
+                        variant="card"
+                      />
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                        Ainda no estoque — pretendido:{' '}
+                        {formatarMoedaBR(veiculo.valor_venda_pretendido)}. O
+                        resultado financeiro entra quando este bem for vendido.
+                      </p>
+                    </div>
+                  )
+                }
+                return (
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Veículo ainda não vendido — margem pretendida:{' '}
+                    {formatarMoedaBR(veiculo.valor_venda_pretendido)}
+                  </p>
+                )
+              })()}
             </Secao>
           )}
 

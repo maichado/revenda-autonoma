@@ -23,6 +23,7 @@ interface Props {
 
 const TODOS_STATUS: StatusVeiculo[] = [
   'em preparação',
+  'mecânico',
   'disponível',
   'reservado',
   'vendido',
@@ -31,6 +32,8 @@ const TODOS_STATUS: StatusVeiculo[] = [
 const pillTone: Record<StatusVeiculo, string> = {
   'em preparação':
     'bg-violet-500 text-white border-violet-500 hover:bg-violet-400',
+  'mecânico':
+    'bg-orange-500 text-zinc-900 border-orange-500 hover:bg-orange-400',
   'disponível':
     'bg-emerald-500 text-zinc-900 border-emerald-500 hover:bg-emerald-400',
   reservado: 'bg-amber-500 text-zinc-900 border-amber-500 hover:bg-amber-400',

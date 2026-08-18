@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Pencil, Trash2 } from 'lucide-react'
 import type { Despesa, Veiculo, Venda } from '@/types'
 import { FORMAS_RECEBIMENTO_VENDA } from '@/types'
 import {
@@ -9,7 +9,9 @@ import {
 import {
   calcularLucroVenda,
   calcularROIVenda,
+  receitaRealizadaDaVenda,
 } from '@/utils/calculos'
+import { RelacaoOrigemTrocaInfo } from './TrocaVeiculoInfo'
 
 interface Props {
   vendas: Venda[]
@@ -19,6 +21,7 @@ interface Props {
   totais: {
     quantidade: number
     receita: number
+    caixa?: number
     lucroTotal: number
     ticketMedio: number
   }
@@ -100,8 +103,8 @@ export function VendaTable({
         <tbody className="table-row-zebra table-row-hover">
           {vendas.map((venda) => {
             const veic = veiculosPorId[venda.veiculo_id]
-            const lucro = calcularLucroVenda(venda, veic, despesas)
-            const roi = calcularROIVenda(venda, veic, despesas)
+            const lucro = calcularLucroVenda(venda, veic, despesas, vendas)
+            const roi = calcularROIVenda(venda, veic, despesas, vendas)
             const corValor =
               lucro >= 0
                 ? 'text-emerald-600 dark:text-emerald-400'
@@ -124,6 +127,43 @@ export function VendaTable({
                       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                         {veic.marca} {veic.modelo}
                       </p>
+                      <RelacaoOrigemTrocaInfo
+                        veiculo={veic}
+                        vendas={vendas}
+                        veiculosPorId={veiculosPorId}
+                        variant="compact"
+                      />
+                      {(venda.troca_veiculo_id ||
+                        venda.valor_troca != null) && (
+                        <p
+                          className="mt-1 flex flex-col gap-0.5 text-[11px] text-amber-700 dark:text-amber-300"
+                          title={
+                            venda.valor_troca != null
+                              ? `${formatarMoeda(venda.entrada ?? 0)} + ${formatarMoeda(venda.valor_troca)} = ${formatarMoeda(venda.valor_venda)}`
+                              : undefined
+                          }
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            <ArrowLeftRight size={11} />
+                            {(() => {
+                              const t =
+                                veiculosPorId[venda.troca_veiculo_id ?? '']
+                              if (t) {
+                                return `Troca: ${t.categoria === 'moto' ? 'moto' : 'carro'} ${t.placa}`
+                              }
+                              return venda.valor_troca != null
+                                ? `Troca ${formatarMoeda(venda.valor_troca)}`
+                                : 'Com troca'
+                            })()}
+                          </span>
+                          {venda.valor_troca != null && (
+                            <span className="tabular text-zinc-500 dark:text-zinc-400">
+                              {formatarMoeda(venda.entrada ?? 0)} +{' '}
+                              {formatarMoeda(venda.valor_troca)}
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </>
                   ) : (
                     <span className="text-xs italic text-zinc-400">
@@ -140,7 +180,12 @@ export function VendaTable({
                   )}
                 </td>
                 <td className="tabular px-3 py-3 text-right font-semibold">
-                  {formatarMoeda(venda.valor_venda)}
+                  <div>{formatarMoeda(receitaRealizadaDaVenda(venda))}</div>
+                  {(Number(venda.valor_troca) || 0) > 0 && (
+                    <div className="text-[10px] font-normal text-zinc-500 dark:text-zinc-400">
+                      dinheiro
+                    </div>
+                  )}
                 </td>
                 <td className="px-3 py-3">
                   <BadgeFormaRecebimento forma={venda.forma_recebimento} />
@@ -215,7 +260,15 @@ export function VendaTable({
               </span>
             </td>
             <td className="tabular px-3 py-3 text-right font-semibold">
-              {formatarMoeda(totais.receita)}
+              <div>{formatarMoeda(totais.receita)}</div>
+              {totais.caixa != null && totais.caixa !== totais.receita && (
+                <div
+                  className="text-[10px] font-normal text-zinc-500 dark:text-zinc-400"
+                  title="Dinheiro que entrou no caixa (sem valor de bens em troca)"
+                >
+                  Caixa {formatarMoeda(totais.caixa)}
+                </div>
+              )}
             </td>
             <td className="px-3 py-3" colSpan={2} />
             <td

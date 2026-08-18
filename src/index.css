@@ -3,9 +3,22 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
-   Reset / base
+   Design tokens — Apple materials + Emil motion (RVD brand preserved)
 --------------------------------------------------------------------------- */
 :root {
+  color-scheme: light;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-press: 120ms;
+  --duration-ui: 200ms;
+  --duration-modal: 280ms;
+  --duration-sheet: 320ms;
+  --material-blur: 20px;
+  --material-saturate: 180%;
+}
+
+.dark {
   color-scheme: dark;
 }
 
@@ -19,12 +32,34 @@ body {
   @apply font-sans antialiased;
   @apply bg-bg-light text-zinc-900;
   font-feature-settings: 'cv11', 'ss01';
+  font-optical-sizing: auto;
+  line-height: 1.5;
+  letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 .dark body {
   @apply bg-bg-dark text-white;
+}
+
+/* Tipografia Apple: tracking negativo em títulos grandes */
+h1,
+.h1 {
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+h2,
+.h2 {
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+h3,
+.h3 {
+  letter-spacing: -0.015em;
+  line-height: 1.25;
 }
 
 /* Números com tabular figures — exigência da spec. */
@@ -53,21 +88,92 @@ body {
 --------------------------------------------------------------------------- */
 @layer components {
   .card {
-    @apply rounded-2xl border bg-surface-light border-border-light shadow-card;
-    @apply dark:bg-surface-dark dark:border-border-dark dark:shadow-card-dark;
+    @apply rounded-[18px] border bg-surface-light shadow-card;
+    border-color: rgba(0, 0, 0, 0.06);
+  }
+
+  .dark .card {
+    @apply bg-surface-dark shadow-card-dark;
+    border-color: rgba(255, 255, 255, 0.08);
   }
 
   .card-hover {
-    @apply transition-colors hover:border-primary/50 dark:hover:border-primary/50;
+    transition: border-color var(--duration-ui) var(--ease-out),
+      box-shadow var(--duration-ui) var(--ease-out);
   }
 
-  /* Micro-interação de clique exigida pela spec. */
+  .card-hover:hover {
+    border-color: rgba(200, 169, 110, 0.45);
+  }
+
+  /* Feedback no press (pointer-down), não só no click */
   .btn-press {
-    @apply transition-transform active:scale-[0.97];
+    transition: transform var(--duration-press) var(--ease-out);
+  }
+
+  .btn-press:active:not(:disabled) {
+    transform: scale(0.97);
   }
 
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium tracking-wide;
+  }
+
+  /* Materiais translúcidos (chrome / sheets) */
+  .material {
+    background: rgba(249, 249, 247, 0.72);
+    backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+    -webkit-backdrop-filter: blur(var(--material-blur))
+      saturate(var(--material-saturate));
+  }
+
+  .dark .material {
+    background: rgba(26, 26, 26, 0.72);
+  }
+
+  .material-heavy {
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(24px) saturate(var(--material-saturate));
+    -webkit-backdrop-filter: blur(24px) saturate(var(--material-saturate));
+  }
+
+  .dark .material-heavy {
+    background: rgba(22, 22, 22, 0.88);
+  }
+
+  .material-light {
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+  }
+
+  .dark .material-light {
+    background: rgba(40, 40, 40, 0.55);
+  }
+
+  /* Fade no encontro chrome ↔ conteúdo (em vez de border duro) */
+  .chrome-edge-b {
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04),
+      0 8px 24px -12px rgba(0, 0, 0, 0.08);
+  }
+
+  .dark .chrome-edge-b {
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  .chrome-edge-t {
+    box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.04),
+      0 -8px 24px -12px rgba(0, 0, 0, 0.08);
+  }
+
+  .dark .chrome-edge-t {
+    box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.06),
+      0 -8px 24px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  .sheet-handle {
+    @apply mx-auto mb-1 h-1 w-9 rounded-full bg-zinc-300/90 dark:bg-zinc-600;
   }
 
   .table-row-zebra > tr:nth-child(even) {
@@ -75,7 +181,11 @@ body {
   }
 
   .table-row-hover > tr {
-    @apply transition-colors hover:bg-primary/5 dark:hover:bg-primary/10;
+    transition: background-color var(--duration-ui) var(--ease-out);
+  }
+
+  .table-row-hover > tr:hover {
+    @apply bg-primary/5 dark:bg-primary/10;
   }
 
   .relatorio-container {
@@ -83,14 +193,72 @@ body {
   }
 
   .input {
-    @apply w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none;
-    @apply border-border-light focus:border-primary focus:ring-2 focus:ring-primary/30;
-    @apply dark:bg-zinc-900 dark:border-border-dark dark:text-white;
+    @apply w-full rounded-xl border bg-white/90 px-3 py-2.5 text-sm outline-none;
+    border-color: rgba(0, 0, 0, 0.08);
+    transition: border-color var(--duration-ui) var(--ease-out),
+      box-shadow var(--duration-ui) var(--ease-out);
+  }
+
+  .input:focus {
+    border-color: rgba(200, 169, 110, 0.7);
+    box-shadow: 0 0 0 3px rgba(200, 169, 110, 0.22);
+  }
+
+  .dark .input {
+    @apply bg-zinc-900/80 text-white;
+    border-color: rgba(255, 255, 255, 0.1);
   }
 
   .kbd {
-    @apply rounded border px-1.5 py-0.5 text-[10px] font-medium;
-    @apply border-border-light text-zinc-600 dark:border-border-dark dark:text-zinc-300;
+    @apply rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-wide;
+    border-color: rgba(0, 0, 0, 0.08);
+    @apply text-zinc-600 dark:text-zinc-300;
+  }
+
+  .dark .kbd {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .btn-press:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .material,
+  .material-heavy,
+  .material-light {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: #ffffff;
+  }
+
+  .dark .material,
+  .dark .material-heavy,
+  .dark .material-light {
+    background: #1a1a1a;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .card,
+  .input {
+    border-color: rgba(0, 0, 0, 0.35) !important;
+  }
+
+  .dark .card,
+  .dark .input {
+    border-color: rgba(255, 255, 255, 0.35) !important;
   }
 }
 

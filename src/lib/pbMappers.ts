@@ -25,8 +25,12 @@ function optRelId(value: unknown): string | undefined {
 }
 
 export function veiculoFromPb(r: RecordModel): Veiculo {
+  const cat = r.categoria === 'moto' || r.categoria === 'carro'
+    ? (r.categoria as Veiculo['categoria'])
+    : undefined
   return {
     id: r.id,
+    categoria: cat,
     placa: String(r.placa ?? ''),
     marca: String(r.marca ?? ''),
     modelo: String(r.modelo ?? ''),
@@ -42,6 +46,11 @@ export function veiculoFromPb(r: RecordModel): Veiculo {
     tipo_propriedade: r.tipo_propriedade === 'meia' ? 'meia' : 'solo',
     socio_parceiro: r.socio_parceiro ? String(r.socio_parceiro) : undefined,
     observacoes: String(r.observacoes ?? ''),
+    acessorios: Array.isArray(r.acessorios)
+      ? (r.acessorios as unknown[])
+          .map((a) => String(a).trim())
+          .filter(Boolean)
+      : [],
     fotos: Array.isArray(r.fotos) ? (r.fotos as string[]) : [],
     despesas_vinculadas: Array.isArray(r.despesas_vinculadas)
       ? (r.despesas_vinculadas as string[])
@@ -76,6 +85,7 @@ export function veiculoFromPb(r: RecordModel): Veiculo {
 export function veiculoToPb(v: Veiculo): Record<string, unknown> {
   return {
     id: v.id,
+    categoria: v.categoria ?? 'carro',
     placa: v.placa,
     marca: v.marca,
     modelo: v.modelo,
@@ -91,6 +101,7 @@ export function veiculoToPb(v: Veiculo): Record<string, unknown> {
     tipo_propriedade: v.tipo_propriedade ?? 'solo',
     socio_parceiro: v.socio_parceiro ?? '',
     observacoes: v.observacoes,
+    acessorios: v.acessorios ?? [],
     fotos: v.fotos,
     despesas_vinculadas: v.despesas_vinculadas,
     compra_pessoal_reembolsada: v.compra_pessoal_reembolsada ?? false,
@@ -149,11 +160,14 @@ export function vendaFromPb(r: RecordModel): Venda {
     entrada: r.entrada != null ? Number(r.entrada) : undefined,
     parcelas: r.parcelas != null ? Number(r.parcelas) : undefined,
     observacoes: String(r.observacoes ?? ''),
+    troca_veiculo_id: optRelId(r.troca_veiculo),
+    valor_troca:
+      r.valor_troca != null ? Number(r.valor_troca) : undefined,
   }
 }
 
 export function vendaToPb(v: Venda): Record<string, unknown> {
-  return {
+  const body: Record<string, unknown> = {
     id: v.id,
     data: v.data,
     veiculo: v.veiculo_id,
@@ -165,7 +179,10 @@ export function vendaToPb(v: Venda): Record<string, unknown> {
     entrada: v.entrada ?? null,
     parcelas: v.parcelas ?? null,
     observacoes: v.observacoes,
+    valor_troca: v.valor_troca ?? null,
   }
+  if (v.troca_veiculo_id) body.troca_veiculo = v.troca_veiculo_id
+  return body
 }
 
 export function despesaFromPb(r: RecordModel): Despesa {

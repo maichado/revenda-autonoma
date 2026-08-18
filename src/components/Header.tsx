@@ -31,32 +31,29 @@ export function Header() {
   )
 
   const hoje = useMemo(() => new Date(), [])
-  const { breakdownMes, breakdownAno } = useMemo(
-    () => {
-      const sim = simularPoolPessoal(veiculos, vendas, capitalInicial, {
+  const { breakdownMes, breakdownAno } = useMemo(() => {
+    const sim = simularPoolPessoal(veiculos, vendas, capitalInicial, {
+      despesas,
+      nomeRevenda,
+      socios,
+    })
+    return {
+      breakdownMes: lucroDoMesBreakdown(
+        vendas,
+        veiculos,
         despesas,
-        nomeRevenda,
-        socios,
-      })
-      return {
-        breakdownMes: lucroDoMesBreakdown(
-          vendas,
-          veiculos,
-          despesas,
-          hoje,
-          sim.fundingPorVeiculo,
-        ),
-        breakdownAno: lucroDoAnoBreakdown(
-          vendas,
-          veiculos,
-          despesas,
-          hoje,
-          sim.fundingPorVeiculo,
-        ),
-      }
-    },
-    [vendas, veiculos, despesas, hoje, capitalInicial, nomeRevenda, socios],
-  )
+        hoje,
+        sim.fundingPorVeiculo,
+      ),
+      breakdownAno: lucroDoAnoBreakdown(
+        vendas,
+        veiculos,
+        despesas,
+        hoje,
+        sim.fundingPorVeiculo,
+      ),
+    }
+  }, [vendas, veiculos, despesas, hoje, capitalInicial, nomeRevenda, socios])
   const breakdown = breakdownMes
   const lucroRevenda = breakdown.revendaLiquido
   const lucroRevendaAno = breakdownAno.revendaLiquido
@@ -65,15 +62,16 @@ export function Header() {
   const marcaCurta = abreviarNomeRevenda(nomeRevenda)
   const nomeDono = socios[0]?.trim().split(/\s+/)[0] || 'Você'
 
-  const dataLonga = format(hoje, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })
+  const dataLonga = format(hoje, "EEEE, d 'de' MMMM 'de' yyyy", {
+    locale: ptBR,
+  })
   const dataCurta = format(hoje, "d 'de' MMM", { locale: ptBR })
 
   return (
     <header
       className={[
-        'sticky top-0 z-30 flex h-16 items-center gap-3 px-4 sm:px-6',
-        'border-b bg-surface-light/80 backdrop-blur border-border-light',
-        'dark:bg-surface-dark/80 dark:border-border-dark',
+        'sticky top-0 z-30 flex h-[60px] items-center gap-3 px-4 sm:h-16 sm:px-6',
+        'material chrome-edge-b',
       ].join(' ')}
     >
       <div className="flex items-center justify-center md:hidden">
@@ -83,11 +81,11 @@ export function Header() {
         />
       </div>
 
-      <div className="hidden md:block">
-        <p className="text-sm font-semibold tracking-tight">
+      <div className="hidden min-w-0 md:block">
+        <p className="truncate text-[15px] font-semibold tracking-tight">
           {nomeRevenda?.trim() || NOME_REVENDA_PADRAO}
         </p>
-        <p className="text-xs capitalize text-zinc-500 dark:text-zinc-400">
+        <p className="truncate text-[11px] capitalize tracking-wide text-zinc-500 dark:text-zinc-400">
           {dataLonga}
         </p>
       </div>
@@ -96,7 +94,7 @@ export function Header() {
         <div className="hidden items-stretch gap-2 md:flex">
           <PainelLucro
             label={`Mês · ${marcaCurta}`}
-            icone={<TrendingUp size={16} className="text-primary" />}
+            icone={<TrendingUp size={15} className="text-primary" />}
             breakdown={breakdownMes}
             positivo={positivoRevenda}
             nomeDono={nomeDono}
@@ -104,7 +102,7 @@ export function Header() {
           />
           <PainelLucro
             label={`Ano · ${hoje.getFullYear()}`}
-            icone={<CalendarRange size={16} className="text-primary" />}
+            icone={<CalendarRange size={15} className="text-primary" />}
             breakdown={breakdownAno}
             positivo={positivoRevendaAno}
             nomeDono={nomeDono}
@@ -114,8 +112,8 @@ export function Header() {
 
         <div
           className={[
-            'flex md:hidden items-center gap-1.5 rounded-md border px-2 py-1 text-xs',
-            'border-border-light dark:border-border-dark',
+            'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs md:hidden',
+            'material-light border border-black/[0.04] dark:border-white/[0.08]',
           ].join(' ')}
           title={`Lucro líquido — mês (${dataCurta}) e acumulado do ano`}
         >
@@ -154,10 +152,6 @@ export function Header() {
   )
 }
 
-// -----------------------------------------------------------------------------
-// Painel de lucro (mês ou ano) — valor principal + divisão dono/sócio quando
-// aplicável. Reaproveitado para os dois períodos exibidos no header.
-// -----------------------------------------------------------------------------
 function PainelLucro({
   label,
   icone,
@@ -177,20 +171,20 @@ function PainelLucro({
   return (
     <div
       className={[
-        'flex items-stretch gap-0 overflow-hidden rounded-lg border',
-        'border-border-light bg-white dark:bg-surface-dark dark:border-border-dark',
+        'flex items-stretch gap-0 overflow-hidden rounded-2xl',
+        'material-light border border-black/[0.04] dark:border-white/[0.08]',
       ].join(' ')}
       title={titulo}
     >
       <div className="flex items-center gap-2 px-3 py-1.5">
         {icone}
         <div className="flex flex-col leading-tight">
-          <span className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
             {label}
           </span>
           <span
             className={[
-              'tabular text-sm font-semibold',
+              'tabular text-sm font-semibold tracking-tight',
               positivo
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-red-600 dark:text-red-400',
@@ -209,26 +203,26 @@ function PainelLucro({
       {(breakdown.temDivisao || breakdown.temPessoal) && (
         <>
           <div
-            className="hidden flex-col justify-center border-l border-border-light px-3 py-1.5 leading-tight lg:flex dark:border-border-dark"
+            className="hidden flex-col justify-center border-l border-black/[0.06] px-3 py-1.5 leading-tight lg:flex dark:border-white/[0.08]"
             title={
               breakdown.temPessoal
                 ? `Revenda: ${formatarMoeda(breakdown.meuRevenda)} + pessoal (Golf, etc.): ${formatarMoeda(breakdown.pessoalLiquido)}`
                 : 'Sua parte na revenda compartilhada'
             }
           >
-            <span className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               {nomeDono}
             </span>
-            <span className="tabular text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+            <span className="tabular text-sm font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">
               {formatarMoeda(breakdown.meu)}
             </span>
           </div>
           {breakdown.temDivisao && (
-            <div className="hidden flex-col justify-center border-l border-border-light px-3 py-1.5 leading-tight lg:flex dark:border-border-dark">
-              <span className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            <div className="hidden flex-col justify-center border-l border-black/[0.06] px-3 py-1.5 leading-tight lg:flex dark:border-white/[0.08]">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                 Sócio
               </span>
-              <span className="tabular text-sm font-semibold text-amber-600 dark:text-amber-400">
+              <span className="tabular text-sm font-semibold tracking-tight text-amber-600 dark:text-amber-400">
                 {formatarMoeda(breakdown.socio)}
               </span>
             </div>

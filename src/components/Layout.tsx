@@ -12,24 +12,24 @@ export function Layout() {
   const colapsada = useStore((s) => s.sidebarColapsada)
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-bg-light dark:bg-bg-dark">
       <Sidebar />
 
       <div
         className={[
-          'flex min-h-screen flex-col transition-[padding] duration-200',
-          colapsada ? 'md:pl-16' : 'md:pl-[220px]',
+          'flex min-h-screen flex-col transition-[padding] duration-300 ease-out',
+          colapsada ? 'md:pl-16' : 'md:pl-[232px]',
         ].join(' ')}
       >
         <MigrarLocalStorageBanner />
         <ServerStatusBanner />
         <Header />
 
-        <main className="flex-1 p-4 pb-24 sm:p-6 md:pb-6">
+        <main className="flex-1 px-4 pb-28 pt-5 sm:px-6 sm:pt-6 md:pb-8 md:pt-7">
           <Outlet />
         </main>
 
-        <footer className="px-4 pb-20 text-center md:hidden">
+        <footer className="px-4 pb-24 text-center md:hidden">
           <AssinaturaAutor />
         </footer>
       </div>

@@ -35,6 +35,7 @@ const pillOrigemTone: Record<OrigemCompra, string> = {
   particular: 'bg-amber-500 text-zinc-900 border-amber-500 hover:bg-amber-400',
   loja: 'bg-violet-500 text-white border-violet-500 hover:bg-violet-400',
   'pré-leilão': 'bg-cyan-500 text-zinc-900 border-cyan-500 hover:bg-cyan-400',
+  troca: 'bg-rose-500 text-white border-rose-500 hover:bg-rose-400',
 }
 
 export function CompraFiltros({

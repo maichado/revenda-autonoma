@@ -1,14 +1,13 @@
 // Segmented control para escolher qual relatório está sendo visualizado.
-//
-// Renderiza 5 botões (Geral, Veículos, Compras, Vendas, Despesas). Em telas
-// pequenas vira um scroll horizontal para manter o conteúdo visível.
 
 import {
   Car,
   FileBarChart,
+  Handshake,
   Receipt,
   ShoppingBag,
   Tags,
+  User,
   type LucideIcon,
 } from 'lucide-react'
 import type { TipoRelatorio } from '@/utils/relatoriosTexto'
@@ -30,6 +29,8 @@ const ABAS: Aba[] = [
   { id: 'compras', label: 'Compras', Icone: ShoppingBag },
   { id: 'vendas', label: 'Vendas', Icone: Tags },
   { id: 'despesas', label: 'Despesas', Icone: Receipt },
+  { id: 'ganho-meia', label: 'A meia (giro)', Icone: Handshake },
+  { id: 'ganho-meus', label: 'Ganho meus', Icone: User },
 ]
 
 export function RelatorioTabs({ valor, onChange }: Props) {

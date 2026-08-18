@@ -68,7 +68,6 @@ export function ToastProvider({ children }: ProviderProps) {
           ? crypto.randomUUID()
           : Math.random().toString(36).slice(2)
       setToasts((prev) => [...prev, { ...t, id }])
-      // Auto-dismiss em 4s.
       window.setTimeout(() => remove(id), 4000)
     },
     [remove],
@@ -90,21 +89,23 @@ export function ToastProvider({ children }: ProviderProps) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="no-print pointer-events-none fixed bottom-4 right-4 z-[60] flex w-full max-w-sm flex-col gap-2 sm:bottom-6 sm:right-6 print:hidden">
+      <div className="no-print pointer-events-none fixed bottom-20 right-4 z-[60] flex w-full max-w-sm flex-col gap-2 sm:bottom-6 sm:right-6 md:bottom-6 print:hidden">
         {toasts.map((t) => (
           <div
             key={t.id}
             className={[
-              'card pointer-events-auto flex items-start gap-3 border-l-4 p-3 pr-2 animate-slide-up',
+              'pointer-events-auto flex items-start gap-3 border-l-4 p-3.5 pr-2',
+              'material-heavy rounded-2xl border border-black/[0.06] shadow-elevated',
+              'animate-slide-up dark:border-white/[0.08] dark:shadow-elevated-dark',
               cores[t.tipo],
             ].join(' ')}
             role="status"
           >
             <div className="mt-0.5">{icones[t.tipo]}</div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold">{t.titulo}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold tracking-tight">{t.titulo}</p>
               {t.mensagem && (
-                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
                   {t.mensagem}
                 </p>
               )}
@@ -112,7 +113,7 @@ export function ToastProvider({ children }: ProviderProps) {
             <button
               onClick={() => remove(t.id)}
               aria-label="Fechar notificação"
-              className="rounded p-1 text-zinc-400 hover:bg-black/5 dark:hover:bg-white/10"
+              className="btn-press rounded-full p-1.5 text-zinc-400 hover:bg-black/[0.05] dark:hover:bg-white/10"
             >
               <X size={14} />
             </button>

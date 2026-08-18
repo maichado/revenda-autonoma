@@ -62,6 +62,16 @@
         "max": 50
       },
       {
+        "name": "categoria",
+        "type": "select",
+        "required": false,
+        "maxSelect": 1,
+        "values": [
+          "carro",
+          "moto"
+        ]
+      },
+      {
         "name": "placa",
         "type": "text",
         "required": true,
@@ -131,6 +141,7 @@
         "maxSelect": 1,
         "values": [
           "em preparação",
+          "mecânico",
           "disponível",
           "reservado",
           "vendido"
@@ -163,6 +174,12 @@
         "type": "text",
         "required": false,
         "max": 5000
+      },
+      {
+        "name": "acessorios",
+        "type": "json",
+        "required": false,
+        "maxSize": 200000
       },
       {
         "name": "fotos",
@@ -404,6 +421,24 @@
         "type": "text",
         "required": false,
         "max": 5000
+      },
+      {
+        "name": "troca_veiculo",
+        "type": "relation",
+        "required": false,
+        "collectionId": "col_veiculos",
+        "cascadeDelete": false,
+        "maxSelect": 1,
+        "displayFields": [
+          "placa"
+        ]
+      },
+      {
+        "name": "valor_troca",
+        "type": "number",
+        "required": false,
+        "min": 0,
+        "noDecimal": false
       },
       {
         "name": "created",

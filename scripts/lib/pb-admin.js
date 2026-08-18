@@ -28,6 +28,9 @@ const VEICULOS_DEVOLUCAO_VENDA_PROBE_FIELD = 'investimento_pessoal_devolvido'
 const VEICULOS_FUNDING_MANUAL_PROBE_FIELD = 'compra_funding_manual'
 const VEICULOS_FUNDING_SOCIO_PROBE_FIELD = 'compra_funding_pessoal_meia_socio'
 const VEICULOS_DATA_ANUNCIO_PROBE_FIELD = 'data_anuncio'
+const VEICULOS_CATEGORIA_PROBE_FIELD = 'categoria'
+const VENDAS_PROBE_COLLECTION = 'vendas'
+const VENDAS_TROCA_PROBE_FIELD = 'troca_veiculo'
 const CONFIGURACOES_COLLECTION = 'configuracoes'
 const CONFIGURACOES_CAPITAL_PROBE_FIELD = 'capital_inicial_pessoal'
 const TENANT_PROBE_FIELD = 'tenant'
@@ -202,6 +205,24 @@ export function needsSchemaImport(collections) {
       needed: true,
       reason:
         'collection veiculos sem campo data_anuncio — reimporte pocketbase/pb_schema.json',
+    }
+  }
+
+  if (!fieldNames.includes(VEICULOS_CATEGORIA_PROBE_FIELD)) {
+    return {
+      needed: true,
+      reason:
+        'collection veiculos sem campo categoria (carro/moto) — reimporte pocketbase/pb_schema.json',
+    }
+  }
+
+  const vendas = byName.get(VENDAS_PROBE_COLLECTION)
+  const vendaFields = collectionFieldNames(vendas)
+  if (!vendaFields.includes(VENDAS_TROCA_PROBE_FIELD)) {
+    return {
+      needed: true,
+      reason:
+        'collection vendas sem campo troca_veiculo — reimporte pocketbase/pb_schema.json',
     }
   }
 

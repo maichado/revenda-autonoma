@@ -36,16 +36,19 @@ import {
 
 import { KpiCard } from './KpiCard'
 import { RelatorioLayout } from './RelatorioLayout'
+import { PainelTrocasRelatorio } from './TrocaVeiculoInfo'
 import {
   calcularIndicadoresDestaque,
   calcularLinhasVeiculos,
   calcularResumoFinanceiro,
   calcularValorEstoque,
+  filtrarPorPeriodo,
   formatarMoedaBR,
   formatarPercentualBR,
   labelPeriodo,
   type Periodo,
 } from '@/utils/relatorios'
+import { resumirTrocasPeriodo } from '@/utils/trocaVenda'
 import {
   gerarTextoRelatorioGeral,
   type EstadoRelatorio,
@@ -90,6 +93,22 @@ export function RelatorioGeral({ estado, periodo }: Props) {
     [estado, periodo],
   )
 
+  const veiculosPorId = useMemo(() => {
+    const map: Record<string, (typeof veiculos)[number]> = {}
+    for (const v of veiculos) map[v.id] = v
+    return map
+  }, [veiculos])
+
+  const resumoTrocas = useMemo(() => {
+    const vendasPeriodo = filtrarPorPeriodo(
+      vendas,
+      periodo.dataInicio,
+      periodo.dataFim,
+      (v) => v.data,
+    )
+    return resumirTrocasPeriodo(vendasPeriodo, veiculosPorId)
+  }, [vendas, periodo, veiculosPorId])
+
   const dadosBarra = [
     { nome: 'Receita', valor: resumo.receita, cor: COR_RECEITA },
     { nome: 'Custos', valor: resumo.custoTotal, cor: COR_CUSTO },
@@ -115,9 +134,16 @@ export function RelatorioGeral({ estado, periodo }: Props) {
           <div data-pdf-section="kpis" className="relatorio-kpi-grid space-y-3">
             <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <KpiCard
-              titulo="Receita"
+              titulo="Receita (dinheiro)"
               valor={formatarMoedaBR(resumo.receita)}
               icone={<CircleDollarSign size={16} />}
+              detalhe={
+                resumoTrocas.quantidade > 0 ? (
+                  <span className="text-[11px] text-zinc-500">
+                    {resumoTrocas.quantidade} troca(s) no estoque à parte
+                  </span>
+                ) : undefined
+              }
             />
             <KpiCard
               titulo="Custos"
@@ -276,7 +302,7 @@ export function RelatorioGeral({ estado, periodo }: Props) {
                 </div>
                 <div className="min-w-0 overflow-hidden rounded-lg bg-zinc-50 p-3 dark:bg-white/[0.04]">
                   <p className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Receita
+                    Receita (dinheiro)
                   </p>
                   <p
                     className="kpi-valor tabular text-lg font-semibold md:text-xl"
@@ -329,6 +355,11 @@ export function RelatorioGeral({ estado, periodo }: Props) {
               </div>
             )}
           </section>
+
+          <PainelTrocasRelatorio
+            resumo={resumoTrocas}
+            veiculosPorId={veiculosPorId}
+          />
 
           {/* Gráfico de barras do período */}
           <section data-pdf-section="grafico" className="card p-4 sm:p-5">

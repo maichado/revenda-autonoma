@@ -24,6 +24,7 @@ import { formatPbError } from '@/lib/pbApi'
 import {
   calcularMargemEsperada,
   custoTotalVeiculo,
+  receitaRealizadaDaVenda,
   resumoFinanceiroVeiculo,
   totalEmEstoque,
   type ResumoFinanceiroVeiculo,
@@ -32,7 +33,7 @@ import {
   formatarMoeda,
   formatarPercentual,
 } from '@/utils/formatadores'
-import type { Veiculo, Venda } from '@/types'
+import type { TrocaNaVendaInput, Veiculo, Venda } from '@/types'
 
 import { Button } from '@/components/Button'
 import { Modal } from '@/components/Modal'
@@ -41,6 +42,7 @@ import { VeiculoCard } from '@/components/VeiculoCard'
 import { VeiculoTable } from '@/components/VeiculoTable'
 import { VeiculoFormModal } from '@/components/VeiculoFormModal'
 import { VendaFormModal } from '@/components/VendaFormModal'
+import { AnuncioVeiculoModal } from '@/components/AnuncioVeiculoModal'
 import {
   VeiculoFiltros,
   type FiltrosVeiculos,
@@ -62,6 +64,7 @@ export default function Veiculos() {
   const veiculos = useStore((s) => s.veiculos)
   const vendas = useStore((s) => s.vendas)
   const despesas = useStore((s) => s.despesas)
+  const nomeRevenda = useStore((s) => s.configuracoes.nome_revenda)
   const addVeiculo = useStore((s) => s.addVeiculo)
   const updateVeiculo = useStore((s) => s.updateVeiculo)
   const deleteVeiculo = useStore((s) => s.deleteVeiculo)
@@ -90,6 +93,9 @@ export default function Veiculos() {
   // ID do veículo que dispara a abertura do modal completo de Venda. O modal
   // do módulo Vendas é REUTILIZADO aqui — apenas pré-preenchemos o veículo.
   const [vendaVeiculoId, setVendaVeiculoId] = useState<string | undefined>(
+    undefined,
+  )
+  const [anuncioVeiculo, setAnuncioVeiculo] = useState<Veiculo | undefined>(
     undefined,
   )
 
@@ -124,13 +130,35 @@ export default function Veiculos() {
     return map
   }, [vendas])
 
+  const veiculosPorId = useMemo(() => {
+    const map: Record<string, Veiculo | undefined> = {}
+    for (const v of veiculos) map[v.id] = v
+    return map
+  }, [veiculos])
+
+  /** Bem que entrou por troca → venda de origem (ex.: BIZ → venda do Uno). */
+  const vendasOrigemTrocaPorId = useMemo(() => {
+    const map: Record<string, Venda | undefined> = {}
+    for (const venda of vendas) {
+      if (venda.troca_veiculo_id) {
+        map[venda.troca_veiculo_id] = venda
+      }
+    }
+    return map
+  }, [vendas])
+
   const resumosPorId = useMemo(() => {
     const out: Record<string, ResumoFinanceiroVeiculo> = {}
     for (const v of veiculos) {
-      out[v.id] = resumoFinanceiroVeiculo(v, despesas, vendasPorVeiculoId[v.id])
+      out[v.id] = resumoFinanceiroVeiculo(
+        v,
+        despesas,
+        vendasPorVeiculoId[v.id],
+        vendas,
+      )
     }
     return out
-  }, [veiculos, despesas, vendasPorVeiculoId])
+  }, [veiculos, despesas, vendasPorVeiculoId, vendas])
 
   // Lista de marcas distintas — alimenta o select do componente de filtros.
   const marcasDisponiveis = useMemo(() => {
@@ -254,11 +282,13 @@ export default function Veiculos() {
   }
 
   // Recebe a venda submetida pelo VendaFormModal; o store cuida da transição
-  // de status (veiculo → "vendido") via addVenda.
-  async function salvarVendaDoCard(venda: Venda) {
+  // de status (veiculo → "vendido") via addVenda. Troca opcional entra no estoque.
+  async function salvarVendaDoCard(venda: Venda, troca?: TrocaNaVendaInput) {
     const ok = await salvarServidor(
-      () => addVenda(venda),
-      'Venda registrada',
+      () => addVenda(venda, troca),
+      troca
+        ? 'Venda registrada com troca no estoque'
+        : 'Venda registrada',
     )
     if (ok) setVendaVeiculoId(undefined)
   }
@@ -302,10 +332,10 @@ export default function Veiculos() {
   )
   const receitaVendidos = useMemo(
     () =>
-      vendidosFiltrados.reduce(
-        (acc, v) => acc + (vendasPorVeiculoId[v.id]?.valor_venda ?? 0),
-        0,
-      ),
+      vendidosFiltrados.reduce((acc, v) => {
+        const venda = vendasPorVeiculoId[v.id]
+        return venda ? acc + receitaRealizadaDaVenda(venda) : acc
+      }, 0),
     [vendidosFiltrados, vendasPorVeiculoId],
   )
 
@@ -509,9 +539,12 @@ export default function Veiculos() {
                 visao={visao}
                 resumosPorId={resumosPorId}
                 vendasPorVeiculoId={vendasPorVeiculoId}
+                veiculosPorId={veiculosPorId}
+                vendasOrigemTrocaPorId={vendasOrigemTrocaPorId}
                 onEditar={abrirEdicao}
                 onExcluir={setVeiculoExcluir}
                 onRegistrarVenda={abrirRegistroVenda}
+                onGerarAnuncio={setAnuncioVeiculo}
                 mensagemVazia="Nenhum veículo disponível com os filtros atuais."
               />
 
@@ -527,9 +560,12 @@ export default function Veiculos() {
                 visao={visao}
                 resumosPorId={resumosPorId}
                 vendasPorVeiculoId={vendasPorVeiculoId}
+                veiculosPorId={veiculosPorId}
+                vendasOrigemTrocaPorId={vendasOrigemTrocaPorId}
                 onEditar={abrirEdicao}
                 onExcluir={setVeiculoExcluir}
                 onRegistrarVenda={abrirRegistroVenda}
+                onGerarAnuncio={setAnuncioVeiculo}
                 mensagemVazia="Nenhum veículo vendido com os filtros atuais."
                 colapsavel
               />
@@ -586,6 +622,13 @@ export default function Veiculos() {
         veiculoIdInicial={vendaVeiculoId}
         onClose={() => setVendaVeiculoId(undefined)}
         onSubmit={salvarVendaDoCard}
+      />
+
+      <AnuncioVeiculoModal
+        open={!!anuncioVeiculo}
+        veiculo={anuncioVeiculo}
+        nomeRevenda={nomeRevenda}
+        onClose={() => setAnuncioVeiculo(undefined)}
       />
 
       {/* Confirmação: limpar tudo */}
@@ -658,9 +701,12 @@ function SecaoVeiculos({
   visao,
   resumosPorId,
   vendasPorVeiculoId,
+  veiculosPorId,
+  vendasOrigemTrocaPorId,
   onEditar,
   onExcluir,
   onRegistrarVenda,
+  onGerarAnuncio,
   mensagemVazia,
   colapsavel = false,
 }: {
@@ -675,9 +721,12 @@ function SecaoVeiculos({
   visao: Visao
   resumosPorId: Record<string, ResumoFinanceiroVeiculo>
   vendasPorVeiculoId: Record<string, Venda | undefined>
+  veiculosPorId: Record<string, Veiculo | undefined>
+  vendasOrigemTrocaPorId: Record<string, Venda | undefined>
   onEditar: (v: Veiculo) => void
   onExcluir: (v: Veiculo) => void
   onRegistrarVenda: (v: Veiculo) => void
+  onGerarAnuncio: (v: Veiculo) => void
   mensagemVazia: string
   colapsavel?: boolean
 }) {
@@ -748,9 +797,12 @@ function SecaoVeiculos({
                 veiculo={v}
                 resumo={resumosPorId[v.id]}
                 venda={vendasPorVeiculoId[v.id]}
+                veiculosPorId={veiculosPorId}
+                vendaOrigemTroca={vendasOrigemTrocaPorId[v.id]}
                 onEditar={() => onEditar(v)}
                 onExcluir={() => onExcluir(v)}
                 onRegistrarVenda={() => onRegistrarVenda(v)}
+                onGerarAnuncio={() => onGerarAnuncio(v)}
               />
             ))}
           </div>
@@ -758,9 +810,13 @@ function SecaoVeiculos({
           <VeiculoTable
             veiculos={veiculos}
             resumosPorId={resumosPorId}
+            vendasPorVeiculoId={vendasPorVeiculoId}
+            veiculosPorId={veiculosPorId}
+            vendasOrigemTrocaPorId={vendasOrigemTrocaPorId}
             onEditar={onEditar}
             onExcluir={onExcluir}
             onRegistrarVenda={onRegistrarVenda}
+            onGerarAnuncio={onGerarAnuncio}
           />
         ))}
     </section>

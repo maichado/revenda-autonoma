@@ -8,9 +8,14 @@ import {
 } from 'react'
 import { format } from 'date-fns'
 import { Link } from 'react-router-dom'
-import { Loader2, Search, Wallet } from 'lucide-react'
+import { Loader2, Plus, Search, Wallet, X } from 'lucide-react'
 import type { StatusVeiculo, TipoPropriedade, Veiculo } from '@/types'
 import { TIPOS_PROPRIEDADE } from '@/types'
+import { ACESSORIOS_VEICULO_PADRAO } from '@/constants/acessoriosVeiculo'
+import {
+  sugerirOpcionaisPorModelo,
+  type SugestaoOpcionaisModelo,
+} from '@/constants/pacotesOpcionaisPorModelo'
 import { Modal } from './Modal'
 import { Button } from './Button'
 import { FotoUploader } from './FotoUploader'
@@ -51,6 +56,7 @@ interface FormState {
   tipo_propriedade: TipoPropriedade
   socio_parceiro: string
   observacoes: string
+  acessorios: string[]
   fotos: string[]
   despesas_vinculadas: string[]
   funding_revenda: string
@@ -65,6 +71,7 @@ type Errors = Partial<Record<keyof FormState, string>>
 
 const STATUS_OPCOES: { valor: StatusVeiculo; label: string }[] = [
   { valor: 'em preparação', label: 'Em preparação' },
+  { valor: 'mecânico', label: 'Mecânico' },
   { valor: 'disponível', label: 'Disponível (anunciado)' },
   { valor: 'reservado', label: 'Reservado' },
   { valor: 'vendido', label: 'Vendido' },
@@ -88,6 +95,7 @@ function estadoInicial(v?: Veiculo): FormState {
       tipo_propriedade: v.tipo_propriedade ?? 'solo',
       socio_parceiro: v.socio_parceiro ?? '',
       observacoes: v.observacoes,
+      acessorios: [...(v.acessorios ?? [])],
       fotos: v.fotos,
       despesas_vinculadas: v.despesas_vinculadas,
       funding_revenda:
@@ -125,6 +133,7 @@ function estadoInicial(v?: Veiculo): FormState {
     tipo_propriedade: 'solo',
     socio_parceiro: '',
     observacoes: '',
+    acessorios: [],
     fotos: [],
     despesas_vinculadas: [],
     funding_revenda: '',
@@ -167,6 +176,11 @@ function formatarMoedaPreview(input: string): string {
 export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
   const [form, setForm] = useState<FormState>(() => estadoInicial(veiculo))
   const [errors, setErrors] = useState<Errors>({})
+  const [acessorioExtra, setAcessorioExtra] = useState('')
+  const [buscaModeloOpcionais, setBuscaModeloOpcionais] = useState('')
+  const [filtroAcessorios, setFiltroAcessorios] = useState('')
+  const [sugestaoOpcionais, setSugestaoOpcionais] =
+    useState<SugestaoOpcionaisModelo | null>(null)
   const socios = useStore((s) => s.configuracoes.socios)
   const listaSocios = sociosAtivos(socios)
   const veiculos = useStore((s) => s.veiculos)
@@ -212,6 +226,10 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
     if (open) {
       setForm(estadoInicial(veiculo))
       setErrors({})
+      setAcessorioExtra('')
+      setBuscaModeloOpcionais('')
+      setFiltroAcessorios('')
+      setSugestaoOpcionais(null)
       setFipeStatus('idle')
       setFipeMsg('')
       fundingEditado.current = Boolean(veiculo?.compra_funding_manual)
@@ -242,6 +260,7 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
       tipo_propriedade: form.tipo_propriedade,
       socio_parceiro: form.socio_parceiro.trim() || undefined,
       observacoes: form.observacoes.trim(),
+      acessorios: form.acessorios,
       fotos: form.fotos,
       despesas_vinculadas: form.despesas_vinculadas,
     }
@@ -380,7 +399,7 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
   function setStatus(novo: StatusVeiculo) {
     setForm((f) => {
       const next = { ...f, status: novo }
-      if (novo === 'em preparação') {
+      if (novo === 'em preparação' || novo === 'mecânico') {
         next.data_anuncio = ''
       } else if (
         !f.data_anuncio &&
@@ -529,11 +548,12 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
 
     if (
       form.status !== 'em preparação' &&
+      form.status !== 'mecânico' &&
       form.status !== 'vendido' &&
       !form.data_anuncio.trim()
     ) {
       e.data_anuncio =
-        'Informe quando o carro foi anunciado (ou mantenha em preparação).'
+        'Informe quando o carro foi anunciado (ou use Em preparação / Mecânico).'
     }
 
     return e
@@ -557,7 +577,7 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
       quilometragem: Number(form.quilometragem) || 0,
       data_compra: form.data_compra,
       data_anuncio:
-        form.status === 'em preparação'
+        form.status === 'em preparação' || form.status === 'mecânico'
           ? undefined
           : form.data_anuncio.trim() || undefined,
       valor_compra: paraNumero(form.valor_compra),
@@ -572,6 +592,7 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
           ? form.socio_parceiro.trim() || undefined
           : undefined,
       observacoes: form.observacoes,
+      acessorios: form.acessorios,
       fotos: form.fotos,
       despesas_vinculadas: form.despesas_vinculadas,
       compra_funding_revenda: fundingNumero(form.funding_revenda),
@@ -801,7 +822,7 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
             label="Data do anúncio"
             error={errors.data_anuncio}
             hint={
-              form.status === 'em preparação'
+              form.status === 'em preparação' || form.status === 'mecânico'
                 ? 'Preencha ao mudar para Disponível ou Reservado.'
                 : 'Quando o carro foi publicado/disponibilizado para venda.'
             }
@@ -811,7 +832,9 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
               className="input tabular"
               value={form.data_anuncio}
               onChange={(e) => setCampo('data_anuncio', e.target.value)}
-              disabled={form.status === 'em preparação'}
+              disabled={
+                form.status === 'em preparação' || form.status === 'mecânico'
+              }
             />
           </Campo>
         </fieldset>
@@ -1058,6 +1081,214 @@ export function VeiculoFormModal({ open, veiculo, onClose, onSubmit }: Props) {
               </div>
             </div>
           )}
+
+        {/* Acessórios / opcionais (anúncio) -------------------------------- */}
+        <div className="block">
+          <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Acessórios e opcionais
+          </span>
+          <p className="mb-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+            Busque pelo modelo para ver sugestões (nada é marcado sozinho). Depois
+            marque só o que o carro realmente tem.
+          </p>
+
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+            <input
+              type="text"
+              className="input flex-1"
+              value={buscaModeloOpcionais}
+              onChange={(e) => setBuscaModeloOpcionais(e.target.value)}
+              placeholder={
+                form.marca || form.modelo
+                  ? `${form.marca} ${form.modelo}`.trim()
+                  : 'Ex.: Golf, Onix, Corolla…'
+              }
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                const q = buscaModeloOpcionais.trim()
+                setSugestaoOpcionais(
+                  sugerirOpcionaisPorModelo(form.marca, form.modelo, q),
+                )
+              }}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              leftIcon={<Search size={14} />}
+              onClick={() => {
+                const q = buscaModeloOpcionais.trim()
+                setSugestaoOpcionais(
+                  sugerirOpcionaisPorModelo(form.marca, form.modelo, q),
+                )
+              }}
+            >
+              Buscar sugestões
+            </Button>
+          </div>
+
+          {sugestaoOpcionais && (
+            <div className="mb-3 rounded-lg border border-border-light p-3 dark:border-border-dark">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Sugestões para{' '}
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-200">
+                    {sugestaoOpcionais.consulta || 'este modelo'}
+                  </span>{' '}
+                  ({sugestaoOpcionais.rotulo}) — clique para marcar/desmarcar
+                </p>
+                <button
+                  type="button"
+                  className="text-[11px] font-medium text-primary hover:underline"
+                  onClick={() => setSugestaoOpcionais(null)}
+                >
+                  Esconder
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {sugestaoOpcionais.itens.map((item) => {
+                  const marcado = form.acessorios.includes(item)
+                  return (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => {
+                        setForm((f) => ({
+                          ...f,
+                          acessorios: marcado
+                            ? f.acessorios.filter((a) => a !== item)
+                            : [...f.acessorios, item],
+                        }))
+                      }}
+                      className={[
+                        'btn-press rounded-full border px-2.5 py-1 text-xs transition-colors',
+                        marcado
+                          ? 'border-primary/50 bg-primary/15 font-medium text-primary'
+                          : 'border-border-light bg-zinc-50 text-zinc-600 hover:border-primary/30 dark:border-border-dark dark:bg-white/[0.04] dark:text-zinc-300',
+                      ].join(' ')}
+                    >
+                      {marcado ? '✓ ' : '+ '}
+                      {item}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <input
+            type="search"
+            className="input mb-2"
+            value={filtroAcessorios}
+            onChange={(e) => setFiltroAcessorios(e.target.value)}
+            placeholder="Filtrar lista (ex.: ar, câmera, couro…)"
+            aria-label="Filtrar acessórios"
+          />
+
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {ACESSORIOS_VEICULO_PADRAO.filter((item) => {
+              const f = filtroAcessorios.trim().toLowerCase()
+              if (!f) return true
+              return item.toLowerCase().includes(f)
+            }).map((item) => {
+              const marcado = form.acessorios.includes(item)
+              return (
+                <label
+                  key={item}
+                  className={[
+                    'flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-colors',
+                    marcado
+                      ? 'border-primary/40 bg-primary/10 text-zinc-900 dark:text-zinc-100'
+                      : 'border-border-light hover:bg-zinc-50 dark:border-border-dark dark:hover:bg-white/[0.04]',
+                  ].join(' ')}
+                >
+                  <input
+                    type="checkbox"
+                    className="accent-primary"
+                    checked={marcado}
+                    onChange={() => {
+                      setForm((f) => ({
+                        ...f,
+                        acessorios: marcado
+                          ? f.acessorios.filter((a) => a !== item)
+                          : [...f.acessorios, item],
+                      }))
+                    }}
+                  />
+                  <span>{item}</span>
+                </label>
+              )
+            })}
+          </div>
+
+          {form.acessorios
+            .filter(
+              (a) =>
+                !(ACESSORIOS_VEICULO_PADRAO as readonly string[]).includes(a),
+            )
+            .map((item) => (
+              <div
+                key={item}
+                className="mt-1.5 flex items-center justify-between gap-2 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-2 text-sm"
+              >
+                <span>{item}</span>
+                <button
+                  type="button"
+                  aria-label={`Remover ${item}`}
+                  className="btn-press grid h-7 w-7 place-items-center rounded-md text-zinc-500 hover:bg-red-500/10 hover:text-red-500"
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      acessorios: f.acessorios.filter((a) => a !== item),
+                    }))
+                  }
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+
+          <div className="mt-2 flex gap-2">
+            <input
+              type="text"
+              className="input flex-1"
+              value={acessorioExtra}
+              onChange={(e) => setAcessorioExtra(e.target.value)}
+              placeholder="Outro item (ex.: sensor de chuva)"
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                const item = acessorioExtra.trim()
+                if (!item) return
+                setForm((f) =>
+                  f.acessorios.includes(item)
+                    ? f
+                    : { ...f, acessorios: [...f.acessorios, item] },
+                )
+                setAcessorioExtra('')
+              }}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              leftIcon={<Plus size={14} />}
+              onClick={() => {
+                const item = acessorioExtra.trim()
+                if (!item) return
+                setForm((f) =>
+                  f.acessorios.includes(item)
+                    ? f
+                    : { ...f, acessorios: [...f.acessorios, item] },
+                )
+                setAcessorioExtra('')
+              }}
+            >
+              Add
+            </Button>
+          </div>
+        </div>
 
         {/* Observações ------------------------------------------------------- */}
         <Campo label="Observações">

@@ -5,12 +5,12 @@ type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'primary'
 
 const toneClasses: Record<Tone, string> = {
   neutral:
-    'bg-zinc-100 text-zinc-700 dark:bg-white/[0.08] dark:text-zinc-200',
-  success: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-  warning: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  danger: 'bg-red-500/15 text-red-600 dark:text-red-400',
-  info: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
-  primary: 'bg-primary/20 text-primary-700 dark:text-primary-200',
+    'bg-zinc-500/10 text-zinc-700 dark:bg-white/[0.1] dark:text-zinc-200',
+  success: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-400',
+  warning: 'bg-amber-500/12 text-amber-700 dark:text-amber-400',
+  danger: 'bg-red-500/12 text-red-700 dark:text-red-400',
+  info: 'bg-sky-500/12 text-sky-700 dark:text-sky-400',
+  primary: 'bg-primary/18 text-primary-800 dark:text-primary-200',
 }
 
 interface Props {
@@ -27,10 +27,9 @@ export function Badge({ tone = 'neutral', children, className = '' }: Props) {
   )
 }
 
-// Cores conforme spec do módulo Estoque:
-// disponível = verde, reservado = âmbar, vendido = cinza/zinco.
 const statusTone: Record<StatusVeiculo, Tone> = {
   'em preparação': 'info',
+  'mecânico': 'primary',
   'disponível': 'success',
   reservado: 'warning',
   vendido: 'neutral',

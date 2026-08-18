@@ -8,6 +8,8 @@ const STATUS_ALIASES: Record<string, StatusVeiculo> = {
   'em preparacao': 'em preparação',
   preparação: 'em preparação',
   preparacao: 'em preparação',
+  'mecânico': 'mecânico',
+  mecanico: 'mecânico',
   disponível: 'disponível',
   disponivel: 'disponível',
   reservado: 'reservado',

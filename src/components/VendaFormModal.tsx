@@ -6,16 +6,21 @@ import {
   type ReactNode,
 } from 'react'
 import { format } from 'date-fns'
+import { ArrowLeftRight } from 'lucide-react'
 import { novoIdPb } from '@/lib/pbIds'
 import { veiculoPossuiOutraVenda } from '@/utils/calculos'
 import type {
+  CategoriaVeiculo,
   FormaRecebimentoVenda,
+  TrocaNaVendaInput,
   Veiculo,
   Venda,
 } from '@/types'
-import { FORMAS_RECEBIMENTO_VENDA } from '@/types'
+import { CATEGORIAS_VEICULO, FORMAS_RECEBIMENTO_VENDA } from '@/types'
 import { Modal } from './Modal'
 import { Button } from './Button'
+import { FotoUploader } from './FotoUploader'
+import { RelacaoOrigemTrocaInfo } from './TrocaVeiculoInfo'
 import { formatarMoeda } from '@/utils/formatadores'
 
 interface Props {
@@ -33,7 +38,11 @@ interface Props {
    */
   veiculoIdInicial?: string
   onClose: () => void
-  onSubmit: (v: Venda) => void
+  /**
+   * No cadastro, `troca` opcional cria o bem no estoque ao salvar.
+   * Na edição, troca não é alterada por este formulário.
+   */
+  onSubmit: (v: Venda, troca?: TrocaNaVendaInput) => void
 }
 
 interface FormState {
@@ -49,7 +58,20 @@ interface FormState {
   observacoes: string
 }
 
-type Errors = Partial<Record<keyof FormState, string>>
+interface TrocaFormState {
+  categoria: CategoriaVeiculo
+  placa: string
+  marca: string
+  modelo: string
+  ano: string
+  cor: string
+  quilometragem: string
+  valor_avaliado: string
+  observacoes: string
+  fotos: string[]
+}
+
+type Errors = Partial<Record<keyof FormState | `troca_${keyof TrocaFormState}`, string>>
 
 function estadoInicial(v?: Venda, veiculoIdInicial?: string): FormState {
   if (v) {
@@ -77,6 +99,21 @@ function estadoInicial(v?: Venda, veiculoIdInicial?: string): FormState {
     entrada: '',
     parcelas: '',
     observacoes: '',
+  }
+}
+
+function trocaInicial(): TrocaFormState {
+  return {
+    categoria: 'moto',
+    placa: '',
+    marca: '',
+    modelo: '',
+    ano: String(new Date().getFullYear()),
+    cor: '',
+    quilometragem: '0',
+    valor_avaliado: '',
+    observacoes: '',
+    fotos: [],
   }
 }
 
@@ -131,6 +168,10 @@ function validarCPF(cpf: string): boolean {
   )
 }
 
+function labelCategoria(c: CategoriaVeiculo): string {
+  return c === 'moto' ? 'Moto' : 'Carro'
+}
+
 // -----------------------------------------------------------------------------
 // Modal principal
 // -----------------------------------------------------------------------------
@@ -148,17 +189,26 @@ export function VendaFormModal({
     estadoInicial(venda, veiculoIdInicial),
   )
   const [errors, setErrors] = useState<Errors>({})
+  const [comTroca, setComTroca] = useState(false)
+  const [troca, setTroca] = useState<TrocaFormState>(trocaInicial)
 
   // Reset ao reabrir / trocar venda editada / mudar veiculoIdInicial.
   useEffect(() => {
     if (open) {
       setForm(estadoInicial(venda, veiculoIdInicial))
       setErrors({})
+      setComTroca(false)
+      setTroca(trocaInicial())
     }
   }, [open, venda, veiculoIdInicial])
 
   const editando = !!venda
   const hoje = useMemo(() => format(new Date(), 'yyyy-MM-dd'), [])
+
+  const veiculoTrocaExistente = useMemo(() => {
+    if (!venda?.troca_veiculo_id) return undefined
+    return veiculos.find((v) => v.id === venda.troca_veiculo_id)
+  }, [venda, veiculos])
 
   // Veículos ordenados por placa, mas com os "disponíveis" no topo para
   // facilitar a escolha (spec: destacar quais NÃO estão vendidos).
@@ -166,7 +216,9 @@ export function VendaFormModal({
     const ordemStatus = (s: Veiculo['status']) => {
       if (s === 'disponível') return 0
       if (s === 'reservado') return 1
-      return 2
+      if (s === 'mecânico') return 2
+      if (s === 'em preparação') return 3
+      return 4
     }
     return [...veiculos].sort((a, b) => {
       const da = ordemStatus(a.status) - ordemStatus(b.status)
@@ -184,9 +236,39 @@ export function VendaFormModal({
   }, [venda])
 
   const mostrarFinanciado = form.forma_recebimento === 'financiado'
+  /** Com troca, a composição do negócio usa `entrada` como dinheiro. */
+  const vendaComTroca = !editando && comTroca
+
+  /** Total = dinheiro (entrada) + valor do bem na troca. */
+  const totalComTroca = useMemo(() => {
+    if (!vendaComTroca) return null
+    const dinheiro = paraNumero(form.entrada)
+    const bem = paraNumero(troca.valor_avaliado)
+    if (!Number.isFinite(dinheiro) || !Number.isFinite(bem)) return null
+    if (dinheiro < 0 || bem < 0) return null
+    return dinheiro + bem
+  }, [vendaComTroca, form.entrada, troca.valor_avaliado])
+
+  const veiculoVendido = useMemo(
+    () => veiculos.find((v) => v.id === form.veiculo_id),
+    [veiculos, form.veiculo_id],
+  )
+
+  const veiculosPorId = useMemo(() => {
+    const map: Record<string, Veiculo> = {}
+    for (const v of veiculos) map[v.id] = v
+    return map
+  }, [veiculos])
 
   function setCampo<K extends keyof FormState>(k: K, valor: FormState[K]) {
     setForm((f) => ({ ...f, [k]: valor }))
+  }
+
+  function setTrocaCampo<K extends keyof TrocaFormState>(
+    k: K,
+    valor: TrocaFormState[K],
+  ) {
+    setTroca((t) => ({ ...t, [k]: valor }))
   }
 
   function validar(): Errors {
@@ -218,8 +300,33 @@ export function VendaFormModal({
       e.comprador_cpf = 'CPF inválido.'
     }
 
-    const valor = paraNumero(form.valor_venda)
-    if (!Number.isFinite(valor) || valor <= 0) {
+    // Com troca: total = entrada (dinheiro) + valor do bem.
+    // Sem troca: valor_venda digitado normalmente.
+    let valor = paraNumero(form.valor_venda)
+    if (vendaComTroca) {
+      const dinheiro = paraNumero(form.entrada)
+      const bem = paraNumero(troca.valor_avaliado)
+      if (!Number.isFinite(dinheiro) || dinheiro < 0) {
+        e.entrada = 'Informe o valor em dinheiro da entrada (>= 0).'
+      }
+      if (!Number.isFinite(bem) || bem <= 0) {
+        e.troca_valor_avaliado =
+          'Informe o valor do bem na troca (maior que zero).'
+      }
+      if (
+        Number.isFinite(dinheiro) &&
+        dinheiro >= 0 &&
+        Number.isFinite(bem) &&
+        bem > 0
+      ) {
+        valor = dinheiro + bem
+        if (valor <= 0) {
+          e.valor_venda = 'O total da venda deve ser maior que zero.'
+        }
+      } else {
+        valor = NaN
+      }
+    } else if (!Number.isFinite(valor) || valor <= 0) {
       e.valor_venda = 'Valor da venda deve ser maior que zero.'
     }
 
@@ -227,8 +334,9 @@ export function VendaFormModal({
       e.forma_recebimento = 'Selecione a forma de recebimento.'
     }
 
-    // Validações condicionais — só quando financiado.
-    if (mostrarFinanciado) {
+    // Financiado sem troca: entrada opcional < valor da venda.
+    // Com troca, a entrada já é o dinheiro da composição (validada acima).
+    if (mostrarFinanciado && !vendaComTroca) {
       if (form.entrada !== '') {
         const ent = paraNumero(form.entrada)
         if (!Number.isFinite(ent) || ent < 0) {
@@ -237,11 +345,35 @@ export function VendaFormModal({
           e.entrada = 'Entrada deve ser menor que o valor da venda.'
         }
       }
-      if (form.parcelas !== '') {
-        const p = Number(form.parcelas)
-        if (!Number.isInteger(p) || p < 1) {
-          e.parcelas = 'Parcelas deve ser um inteiro maior ou igual a 1.'
+    }
+    if (mostrarFinanciado && form.parcelas !== '') {
+      const p = Number(form.parcelas)
+      if (!Number.isInteger(p) || p < 1) {
+        e.parcelas = 'Parcelas deve ser um inteiro maior ou igual a 1.'
+      }
+    }
+
+    // Troca — dados do bem (só no cadastro).
+    if (vendaComTroca) {
+      if (!troca.placa.trim()) {
+        e.troca_placa = 'Informe a placa do bem da troca.'
+      } else {
+        const placa = troca.placa.trim().toUpperCase()
+        if (
+          veiculos.some((v) => v.placa.trim().toUpperCase() === placa)
+        ) {
+          e.troca_placa = 'Já existe um veículo com esta placa no estoque.'
         }
+      }
+      if (!troca.marca.trim()) e.troca_marca = 'Informe a marca.'
+      if (!troca.modelo.trim()) e.troca_modelo = 'Informe o modelo.'
+      const ano = Number(troca.ano)
+      if (!Number.isInteger(ano) || ano < 1900 || ano > 2100) {
+        e.troca_ano = 'Ano inválido.'
+      }
+      const km = Number(troca.quilometragem)
+      if (!Number.isFinite(km) || km < 0) {
+        e.troca_quilometragem = 'Quilometragem inválida.'
       }
     }
 
@@ -256,6 +388,12 @@ export function VendaFormModal({
 
     const id = venda?.id ?? novoIdPb()
 
+    const dinheiroTroca = vendaComTroca ? paraNumero(form.entrada) : NaN
+    const bemTroca = vendaComTroca ? paraNumero(troca.valor_avaliado) : NaN
+    const valorTotal = vendaComTroca
+      ? dinheiroTroca + bemTroca
+      : paraNumero(form.valor_venda)
+
     const nova: Venda = {
       id,
       data: form.data,
@@ -263,26 +401,45 @@ export function VendaFormModal({
       comprador_nome: form.comprador_nome.trim(),
       comprador_cpf: form.comprador_cpf.trim() || undefined,
       comprador_contato: form.comprador_contato.trim(),
-      valor_venda: paraNumero(form.valor_venda),
+      valor_venda: valorTotal,
       // Venda.forma_recebimento é tipado como FormaPagamento (amplo) para
       // suportar legados — aqui o valor sempre cai em uma das opções válidas.
       forma_recebimento: form.forma_recebimento as Venda['forma_recebimento'],
       observacoes: form.observacoes.trim(),
+      troca_veiculo_id: venda?.troca_veiculo_id,
+      valor_troca: venda?.valor_troca,
     }
 
-    // Campos condicionais — só persistem quando relevantes.
-    if (mostrarFinanciado) {
-      if (form.entrada !== '') {
-        const ent = paraNumero(form.entrada)
-        if (Number.isFinite(ent)) nova.entrada = ent
-      }
-      if (form.parcelas !== '') {
-        const p = Number(form.parcelas)
-        if (Number.isInteger(p) && p >= 1) nova.parcelas = p
+    // Com troca: entrada = dinheiro; total = entrada + valor do bem.
+    if (vendaComTroca && Number.isFinite(dinheiroTroca)) {
+      nova.entrada = dinheiroTroca
+    } else if (mostrarFinanciado && form.entrada !== '') {
+      const ent = paraNumero(form.entrada)
+      if (Number.isFinite(ent)) nova.entrada = ent
+    }
+
+    if (mostrarFinanciado && form.parcelas !== '') {
+      const p = Number(form.parcelas)
+      if (Number.isInteger(p) && p >= 1) nova.parcelas = p
+    }
+
+    let trocaInput: TrocaNaVendaInput | undefined
+    if (vendaComTroca) {
+      trocaInput = {
+        categoria: troca.categoria,
+        placa: troca.placa.trim().toUpperCase(),
+        marca: troca.marca.trim(),
+        modelo: troca.modelo.trim(),
+        ano: Number(troca.ano),
+        cor: troca.cor.trim(),
+        quilometragem: Number(troca.quilometragem) || 0,
+        valor_avaliado: bemTroca,
+        observacoes: troca.observacoes.trim() || undefined,
+        fotos: troca.fotos,
       }
     }
 
-    onSubmit(nova)
+    onSubmit(nova, trocaInput)
   }
 
   return (
@@ -292,7 +449,7 @@ export function VendaFormModal({
       description={
         editando
           ? 'Atualize os dados da venda. O status do veículo é re-sincronizado automaticamente.'
-          : 'Registre uma venda. O veículo associado será marcado como vendido automaticamente.'
+          : 'Registre uma venda. O veículo associado será marcado como vendido automaticamente. Se entrou um carro ou moto no negócio, ative a troca para cadastrar no estoque.'
       }
       onClose={onClose}
       size="xl"
@@ -352,10 +509,17 @@ export function VendaFormModal({
                     ? ' · vendido'
                     : v.status === 'reservado'
                       ? ' · reservado'
-                      : ''
+                      : v.status === 'mecânico'
+                        ? ' · mecânico'
+                        : v.status === 'em preparação'
+                          ? ' · em preparação'
+                          : ''
+                const cat =
+                  v.categoria === 'moto' ? ' · moto' : ''
                 return (
                   <option key={v.id} value={v.id}>
                     {v.placa} — {v.marca} {v.modelo}
+                    {cat}
                     {sufixo}
                   </option>
                 )
@@ -363,6 +527,15 @@ export function VendaFormModal({
             </select>
           </Campo>
         </fieldset>
+
+        {veiculoVendido && (
+          <RelacaoOrigemTrocaInfo
+            veiculo={veiculoVendido}
+            vendas={vendas}
+            veiculosPorId={veiculosPorId}
+            variant="card"
+          />
+        )}
 
         {/* Linha 2: comprador (nome + CPF) */}
         <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -395,8 +568,14 @@ export function VendaFormModal({
           </Campo>
         </fieldset>
 
-        {/* Linha 3: contato + valor */}
-        <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {/* Linha 3: contato (+ valor só sem troca — com troca o total é calculado) */}
+        <fieldset
+          className={
+            vendaComTroca
+              ? 'grid grid-cols-1 gap-3'
+              : 'grid grid-cols-1 gap-3 sm:grid-cols-2'
+          }
+        >
           <Campo label="Contato do comprador">
             <input
               className="input"
@@ -406,26 +585,28 @@ export function VendaFormModal({
             />
           </Campo>
 
-          <Campo
-            label="Valor da venda *"
-            error={errors.valor_venda}
-            hint={
-              form.valor_venda
-                ? formatarMoedaPreview(form.valor_venda)
-                : 'R$'
-            }
-          >
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              className="input tabular"
-              value={form.valor_venda}
-              onChange={(e) => setCampo('valor_venda', e.target.value)}
-              placeholder="0,00"
-              required
-            />
-          </Campo>
+          {!vendaComTroca && (
+            <Campo
+              label="Valor da venda *"
+              error={errors.valor_venda}
+              hint={
+                form.valor_venda
+                  ? formatarMoedaPreview(form.valor_venda)
+                  : 'Preço acordado do veículo vendido.'
+              }
+            >
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                className="input tabular"
+                value={form.valor_venda}
+                onChange={(e) => setCampo('valor_venda', e.target.value)}
+                placeholder="0,00"
+                required
+              />
+            </Campo>
+          )}
         </fieldset>
 
         {/* Linha 4: forma de recebimento */}
@@ -452,8 +633,8 @@ export function VendaFormModal({
           </Campo>
         </fieldset>
 
-        {/* Linha 5: entrada + parcelas — somente para financiado. */}
-        {mostrarFinanciado && (
+        {/* Financiado: entrada só aparece sem troca (com troca a entrada é o dinheiro da composição). */}
+        {mostrarFinanciado && !vendaComTroca && (
           <fieldset className="grid grid-cols-1 gap-3 rounded-lg border border-dashed border-border-light p-3 sm:grid-cols-2 dark:border-border-dark">
             <Campo
               label="Entrada (opcional)"
@@ -491,6 +672,297 @@ export function VendaFormModal({
               />
             </Campo>
           </fieldset>
+        )}
+
+        {mostrarFinanciado && vendaComTroca && (
+          <Campo
+            label="Parcelas (opcional)"
+            error={errors.parcelas}
+            hint="Se o dinheiro da entrada for parcelado."
+          >
+            <input
+              type="number"
+              step="1"
+              min={1}
+              className="input tabular max-w-xs"
+              value={form.parcelas}
+              onChange={(e) => setCampo('parcelas', e.target.value)}
+              placeholder="Ex.: 48"
+            />
+          </Campo>
+        )}
+
+        {/* Troca na venda — cadastro ou resumo na edição */}
+        {editando && (venda?.troca_veiculo_id || venda?.valor_troca) ? (
+          <section className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <p className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-200">
+              <ArrowLeftRight size={16} />
+              Troca nesta venda
+            </p>
+            <p className="mt-1 tabular text-xs text-zinc-600 dark:text-zinc-300">
+              {venda?.entrada != null
+                ? formatarMoeda(venda.entrada)
+                : 'R$ 0,00'}{' '}
+              (dinheiro)
+              {' + '}
+              {venda?.valor_troca != null
+                ? formatarMoeda(venda.valor_troca)
+                : '—'}{' '}
+              (troca)
+              {' = '}
+              <span className="font-semibold">
+                {formatarMoeda(venda?.valor_venda ?? 0)}
+              </span>{' '}
+              total
+            </p>
+            {veiculoTrocaExistente ? (
+              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                Entrou{' '}
+                <span className="font-semibold">
+                  {labelCategoria(veiculoTrocaExistente.categoria ?? 'carro')}
+                </span>{' '}
+                {veiculoTrocaExistente.placa} — {veiculoTrocaExistente.marca}{' '}
+                {veiculoTrocaExistente.modelo}. Já está no estoque.
+              </p>
+            ) : venda?.troca_veiculo_id ? (
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                Veículo da troca não encontrado na lista atual.
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {!editando && (
+          <section className="space-y-3 rounded-lg border border-dashed border-border-light p-3 dark:border-border-dark">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={comTroca}
+                onChange={(e) => setComTroca(e.target.checked)}
+              />
+              <span>
+                <span className="flex items-center gap-1.5 text-sm font-medium">
+                  <ArrowLeftRight size={14} />
+                  Entrou carro ou moto na troca
+                </span>
+                <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                  Dinheiro de entrada + valor do bem = total da venda. O bem
+                  entra no estoque com fotos (status &quot;em preparação&quot;).
+                </span>
+              </span>
+            </label>
+
+            {comTroca && (
+              <div className="space-y-3 border-t border-border-light pt-3 dark:border-border-dark">
+                <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Campo
+                    label="Valor em dinheiro (entrada) *"
+                    error={errors.entrada}
+                    hint={
+                      form.entrada
+                        ? formatarMoedaPreview(form.entrada)
+                        : 'Quanto entrou em dinheiro no negócio.'
+                    }
+                  >
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      className="input tabular"
+                      value={form.entrada}
+                      onChange={(e) => setCampo('entrada', e.target.value)}
+                      placeholder="0,00"
+                      required={comTroca}
+                    />
+                  </Campo>
+                  <Campo
+                    label={`Valor da ${labelCategoria(troca.categoria).toLowerCase()} (troca) *`}
+                    error={errors.troca_valor_avaliado}
+                    hint={
+                      troca.valor_avaliado
+                        ? formatarMoedaPreview(troca.valor_avaliado)
+                        : 'Valor abatido no negócio (= custo no estoque).'
+                    }
+                  >
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      className="input tabular"
+                      value={troca.valor_avaliado}
+                      onChange={(e) =>
+                        setTrocaCampo('valor_avaliado', e.target.value)
+                      }
+                      placeholder="0,00"
+                      required={comTroca}
+                    />
+                  </Campo>
+                </fieldset>
+
+                <div
+                  className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm"
+                  role="status"
+                >
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-200">
+                    Total da venda
+                  </p>
+                  <p className="mt-0.5 tabular text-base font-semibold tracking-tight">
+                    {totalComTroca != null
+                      ? formatarMoeda(totalComTroca)
+                      : '—'}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {formatarMoeda(paraNumero(form.entrada) || 0)} (dinheiro no
+                    caixa) +{' '}
+                    {formatarMoeda(paraNumero(troca.valor_avaliado) || 0)}{' '}
+                    (bem no estoque)
+                    {errors.valor_venda ? (
+                      <span className="ml-1 text-red-500">
+                        {errors.valor_venda}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+
+                {veiculoVendido?.tipo_propriedade === 'meia' && (
+                  <p className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                    O veículo vendido é <strong>a meia</strong>
+                    {veiculoVendido.socio_parceiro
+                      ? ` com ${veiculoVendido.socio_parceiro}`
+                      : ''}
+                    . A {labelCategoria(troca.categoria).toLowerCase()} da troca
+                    também entra no estoque <strong>a meia</strong> (mesmo
+                    sócio). Só o dinheiro da entrada vai para o caixa revenda —
+                    o bem não conta como caixa.
+                  </p>
+                )}
+
+                {veiculoVendido &&
+                  veiculoVendido.tipo_propriedade !== 'meia' && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Só o valor em dinheiro entra no caixa. A{' '}
+                      {labelCategoria(troca.categoria).toLowerCase()} fica no
+                      estoque (em preparação), sem saída de caixa.
+                    </p>
+                  )}
+
+                <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Campo label="Tipo *">
+                    <select
+                      className="input"
+                      value={troca.categoria}
+                      onChange={(e) =>
+                        setTrocaCampo(
+                          'categoria',
+                          e.target.value as CategoriaVeiculo,
+                        )
+                      }
+                    >
+                      {CATEGORIAS_VEICULO.map((c) => (
+                        <option key={c} value={c}>
+                          {labelCategoria(c)}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
+                  <Campo
+                    label="Placa *"
+                    error={errors.troca_placa}
+                    hint="Do bem que entra no estoque."
+                  >
+                    <input
+                      className="input tabular uppercase"
+                      value={troca.placa}
+                      onChange={(e) =>
+                        setTrocaCampo('placa', e.target.value.toUpperCase())
+                      }
+                      placeholder="ABC1D23"
+                      maxLength={8}
+                      required={comTroca}
+                    />
+                  </Campo>
+                </fieldset>
+
+                <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Campo label="Marca *" error={errors.troca_marca}>
+                    <input
+                      className="input"
+                      value={troca.marca}
+                      onChange={(e) => setTrocaCampo('marca', e.target.value)}
+                      placeholder={
+                        troca.categoria === 'moto' ? 'Honda, Yamaha…' : 'VW, Fiat…'
+                      }
+                      required={comTroca}
+                    />
+                  </Campo>
+                  <Campo label="Modelo *" error={errors.troca_modelo}>
+                    <input
+                      className="input"
+                      value={troca.modelo}
+                      onChange={(e) => setTrocaCampo('modelo', e.target.value)}
+                      placeholder={
+                        troca.categoria === 'moto' ? 'CG 160…' : 'Gol, Onix…'
+                      }
+                      required={comTroca}
+                    />
+                  </Campo>
+                </fieldset>
+
+                <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <Campo label="Ano *" error={errors.troca_ano}>
+                    <input
+                      type="number"
+                      min={1900}
+                      max={2100}
+                      className="input tabular"
+                      value={troca.ano}
+                      onChange={(e) => setTrocaCampo('ano', e.target.value)}
+                      required={comTroca}
+                    />
+                  </Campo>
+                  <Campo label="Cor">
+                    <input
+                      className="input"
+                      value={troca.cor}
+                      onChange={(e) => setTrocaCampo('cor', e.target.value)}
+                      placeholder="Preta, prata…"
+                    />
+                  </Campo>
+                  <Campo
+                    label="Quilometragem"
+                    error={errors.troca_quilometragem}
+                  >
+                    <input
+                      type="number"
+                      min={0}
+                      className="input tabular"
+                      value={troca.quilometragem}
+                      onChange={(e) =>
+                        setTrocaCampo('quilometragem', e.target.value)
+                      }
+                    />
+                  </Campo>
+                </fieldset>
+
+                <Campo label="Observações da troca">
+                  <textarea
+                    className="input min-h-[60px] resize-y"
+                    value={troca.observacoes}
+                    onChange={(e) =>
+                      setTrocaCampo('observacoes', e.target.value)
+                    }
+                    placeholder="Estado do bem, documentos, pendências…"
+                  />
+                </Campo>
+
+                <FotoUploader
+                  fotos={troca.fotos}
+                  onChange={(fotos) => setTrocaCampo('fotos', fotos)}
+                />
+              </div>
+            )}
+          </section>
         )}
 
         {/* Observações */}
